@@ -12,6 +12,19 @@ For complete startup, configuration, architecture, deployment, and troubleshooti
 instructions, see the [implementation and operator runbook](IMPLEMENTATION.md).
 The clean public source is at <https://github.com/ShemManyu/FoleyGraph>.
 
+## Live demo
+
+[Watch the 2:40 production demo](https://foleygraphfokas1029.z20.web.core.windows.net/demos/meta-sam2-fa695defd810/),
+[download the MP4](https://foleygraphfokas1029.z20.web.core.windows.net/demos/meta-sam2-fa695defd810/FoleyGraph-demo.mp4),
+or [open the app](https://foleygraph-fokas.azurewebsites.net).
+
+Recorded against the actual App Service using licensed moving stock, genuine Meta
+SAM 2.1 masks, conversational edits and real exports. The film identifies our
+event-built contributions and upstream foundations. Wait acceleration and synthetic
+narration are disclosed. [Sanitized verification and hashes](https://foleygraphfokas1029.z20.web.core.windows.net/demos/meta-sam2-fa695defd810/evidence.json)
+include both 150-frame motion checks and untouched sound-layer evidence.
+Native sharing is supported; **WhatsApp Business automation is not implemented**.
+
 ## What works
 
 - Upload a clip, remix **Weekend, remixed**, with real people outdoors, or choose the
