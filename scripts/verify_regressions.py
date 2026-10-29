@@ -25,6 +25,15 @@ def main():
     )
     cases = (
         (
+            segmentation_module,
+            segmentation_module,
+            "predict_mask",
+            'size = info["input_size"]',
+            "size = INPUT_SIZE",
+            "tests/test_segmentation.py::test_predictor_uses_installed_bundle_resolution",
+            "feeding the wrong image and prompt resolution to an installed Meta bundle",
+        ),
+        (
             preparation_module,
             preparation_module,
             "download",

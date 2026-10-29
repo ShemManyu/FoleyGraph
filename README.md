@@ -109,7 +109,7 @@ editor explicitly reports manual mode; no fabricated AI output is substituted.
 
 ### Enable Meta image masks
 
-The [reviewed CPU bundle](https://github.com/ShemManyu/FoleyGraph/releases/tag/meta-sam2.1-cpu-v1)
+The [reviewed CPU bundle](https://github.com/ShemManyu/FoleyGraph/releases/tag/meta-sam2.1-cpu-v2)
 is public. Reproducible export instructions and the latest download verification are in
 [the runbook](IMPLEMENTATION.md#optional-meta-sam-21-masks).
 The installer uses an identical, versioned mirror on the project's existing Azure

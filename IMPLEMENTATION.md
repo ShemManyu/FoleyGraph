@@ -173,7 +173,7 @@ optional local Meta model supplies real learned masks for that selection.
 It is **SAM 2.1 Hiera Tiny image-anchor inference**, not SAM 3, not newly trained
 weights, and not the full SAM video-memory predictor.
 
-The [reviewed prepared bundle](https://github.com/ShemManyu/FoleyGraph/releases/tag/meta-sam2.1-cpu-v1)
+The [reviewed prepared bundle](https://github.com/ShemManyu/FoleyGraph/releases/tag/meta-sam2.1-cpu-v2)
 is public. Stop the application and run:
 
 ```bash
@@ -184,7 +184,7 @@ is public. Stop the application and run:
 Download mode verifies the two reviewed ONNX hashes, retains Meta's license,
 and writes the manifest last. It needs no Torch installation or model account.
 The default download uses the identical
-[versioned Azure mirror](https://foleygraphfokas1029.z20.web.core.windows.net/models/meta-sam2.1-cpu-v1/manifest.json);
+[versioned Azure mirror](https://foleygraphfokas1029.z20.web.core.windows.net/models/meta-sam2.1-cpu-v2/manifest.json);
 GitHub retains the reviewed release as a second public distribution.
 Allow time for the transfer: progress is reported every 10 MiB, and each file has
 a 15-minute transfer budget plus a 30-second socket inactivity timeout.
@@ -203,8 +203,14 @@ model bundle to render.
 The reviewed combined model fingerprint is:
 
 ```text
-842f7b7fd7c74b1bf64c80b96358f6c88ff315005300def7e6e5f6ab14d9c37c
+d36e9d0c438cc2278b1d32de89ccaf4352ea44d8cc9339f610bc3ced4b7d0a9a
 ```
+
+The v2 bundle uses a 512-pixel encoder input. The original v1 768-pixel bundle
+remains recognized, with its own image/prompt scale and unchanged fingerprint
+`842f7b7fd7c74b1bf64c80b96358f6c88ff315005300def7e6e5f6ab14d9c37c`.
+Changing the installed bundle does not relabel old effects: their saved weight
+fingerprint must still match. Use the matching bundle to render an old project.
 
 ONNX Runtime executes on CPU with one inference thread. SAM runs at grounding
 anchors, with a one-second maximum refresh gap for sparse controls. Between
@@ -812,3 +818,67 @@ left on device`. Frontend job `17581812030` could not pull its Node image
   exhaustion, confirmed in backend job `17582405560` and frontend job
   `17582405561`. This is not a successful CI run.
 - **Next:** merge the source PR/MR, deploy, and measure a real B1 edit.
+
+### 2026-10-29: public main, deployed model, and first B1 deadline failure
+
+- **Published:** public application [PR #1](https://github.com/ShemManyu/FoleyGraph/pull/1)
+  is merged as `850643f`. A credential-free HTTPS clone of public main succeeded;
+  all `58` tracked files matched the private source and backend fingerprint.
+  Private feature [MR !7](https://gitlab.com/fokas-labs/folio/-/merge_requests/7)
+  is merged as `5a2e7a6`, without bypassing a required branch check.
+- **Deployed:** Azure build `3f47a73b-db60-4e5f-a28a-d5b159f7496f` completed.
+  HTTPS, Table Storage, frontend HTML, backend `ec25d71e...`, and model
+  `842f7b7f...` passed the source-aware readiness check. The plan remains
+  B1 with one instance.
+- **Actual B1 result:** the first full six-second outfit edit returned HTTP
+  `422`: `This color edit took too long. Try a shorter clip.` The request took
+  `165.84s`, including grounding. Readiness did not prove successful inference.
+  No successful production Meta demo is claimed. The raw failed take is retained
+  separately under `.data/showcase/meta-submission-attempt1-timeout/`.
+- **Measured memory:** Azure's one-minute maximum working-set observations reached
+  about `772 MiB` around the attempt, not an exact process peak. The returned
+  error identifies the render deadline, not an out-of-memory crash.
+- **Rejected experiment:** four model calls instead of eight reduced the local
+  render to `12.51s`, and its unit/mutation checks passed, but motion review
+  exposed uncolored strips on newly revealed trousers. Sampled changed-pixel
+  coverage of the CV guide fell to `88-90%`. This was visibly unacceptable and
+  was discarded, not deployed. The original anchor cadence remains intact.
+- **Next candidate:** reproduce the official checkpoint at a 512-pixel encoder
+  input, retaining all eight actual grounding refreshes and the unchanged
+  120-second render budget. Verify masks, exact provenance, reproducibility,
+  and real B1 behavior before filming. Only a successful real take will enter
+  the final film.
+
+### 2026-10-29: genuine 512-pixel CPU bundle verified locally
+
+- **Model:** the checked-in exporter reproduces the reviewed 512-pixel encoder
+  and decoder byte-for-byte from the same official checkpoint and pinned Meta
+  source. The v2 identity is
+  `d36e9d0c438cc2278b1d32de89ccaf4352ea44d8cc9339f610bc3ced4b7d0a9a`.
+  The original 768-pixel v1 files are not overwritten on either public host.
+- **Independent parity:** PyTorch and ONNX masks have IoU `1.0` on both original
+  endpoint controls. Variable prompt counts `6`, `7`, and `9` execute correctly;
+  foreground points are covered and protected points remain outside the mask.
+  Predicted quality is not measured semantic segmentation accuracy.
+- **Actual runtime:** all `150` stock frames decode, with all `8` grounding
+  refreshes retained. The default-runtime render and decode took `11.73s`
+  locally and peaked at about `749 MiB` RSS. This is a local ARM measurement,
+  not B1 performance. Sampled CV-guide changed-pixel coverage is `99.8-100%`,
+  source bytes are unchanged, and the rightmost 140 raw image columns remain
+  untouched on every frame. Motion contact-sheet review passed.
+- **Compatibility:** image tensors, prompts, and refinement scale use the
+  installed manifest's 512- or 768-pixel input. Old effect fingerprints are
+  retained, not relabeled as v2. No grounding anchors, confidence/protection
+  checks, atomic commit behavior, or render deadline were relaxed.
+- **Checks:** `62` backend tests and `25` deliberate regression controls pass,
+  including a mutation that uses the wrong installed-bundle resolution.
+  Python style checks pass; frontend/browser results remain applicable because
+  no frontend code or dependency changed.
+- **Artifacts:** local receipts are in
+  `.data/meta-integration-check/b1-512-runtime-provenance.json`,
+  `.data/meta-integration-check/b1-512-default-runtime/`, and
+  `.data/meta-prototype/input-512/runtime-verification.json`.
+  The four reviewed files are uploaded to the versioned public Azure v2 path.
+- **Next:** publish the v2 release/source, verify its anonymous installer,
+  deploy to the existing B1 service, and verify an actual successful edit
+  before using any replacement capture.

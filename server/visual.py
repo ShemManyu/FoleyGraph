@@ -8,7 +8,13 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 from server.models import Project, RecolorEffect
-from server.segmentation import predict_mask, propagate_mask, refine_tracked_mask
+from server.segmentation import (
+    INPUT_SIZE,
+    model_info,
+    predict_mask,
+    propagate_mask,
+    refine_tracked_mask,
+)
 
 cv2.setNumThreads(1)
 
@@ -346,7 +352,9 @@ class RecolorTrack:
                 self.model_timestamp = timestamp
             else:
                 self.model_mask = propagate_mask(self.model_mask, self.model_gray, gray)
-            self.model_mask = refine_tracked_mask(self.model_mask, model_guide)
+            self.model_mask = refine_tracked_mask(
+                self.model_mask, model_guide, (model_info() or {}).get("input_size", INPUT_SIZE)
+            )
             self.model_gray = gray
             excluded |= self.model_mask == 0
             full_mask = np.where(excluded, 0, full_mask).astype(np.uint8)

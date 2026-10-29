@@ -64,6 +64,42 @@ def test_corrupt_model_is_rejected_before_inference(prepared_model, filename):
         segmentation.model_info()
 
 
+@pytest.mark.parametrize("input_size", [512, 768])
+def test_predictor_uses_installed_bundle_resolution(prepared_model, monkeypatch, input_size):
+    manifest = prepared_model / "manifest.json"
+    data = json.loads(manifest.read_text())
+    data["input_size"] = input_size
+    manifest.write_text(json.dumps(data))
+    tensors, prompts = [], []
+    logits = np.full((1, 1, 240, 320), -1, np.float32)
+    logits[:, :, 84:173, 208:272] = 1
+
+    def encode(_, inputs):
+        tensors.append(inputs["image"])
+        return [np.zeros((1, 1), np.float32)] * 3
+
+    def decode(_, inputs):
+        prompts.append(inputs["coordinates"])
+        return logits, np.array([[0.95]], np.float32)
+
+    monkeypatch.setattr(
+        segmentation,
+        "_sessions",
+        lambda: (SimpleNamespace(run=encode), SimpleNamespace(run=decode)),
+    )
+    result = segmentation.predict_mask(
+        np.full((240, 320, 3), 100, np.uint8),
+        np.array([[208, 84], [272, 84], [272, 173], [208, 173]], np.float32),
+        np.array([[0.75, 0.54]], np.float32),
+        np.array([[0.25, 0.54]], np.float32),
+        (logits[0, 0] > 0).astype(np.uint8) * 255,
+        segmentation.model_info()["sha256"],
+    )
+    assert tensors[0].shape == (1, 3, input_size, input_size)
+    np.testing.assert_allclose(prompts[0][0, 2], np.array([0.75, 0.54]) * input_size)
+    assert result[125, 220] == 255 and result[129, 80] == 0
+
+
 @pytest.mark.parametrize(
     ("score", "protected_hit"),
     [(0.4, False), (0.95, True)],

@@ -13,7 +13,7 @@ MODEL_NAME = "sam2.1-hiera-tiny"
 MODEL_DIR = Path(__file__).parent / "assets" / "models" / MODEL_NAME
 CHECKPOINT_SHA256 = "7402e0d864fa82708a20fbd15bc84245c2f26dff0eb43a4b5b93452deb34be69"
 SOURCE_REVISION = "2b90b9f5ceec907a1c18123530e92e794ad901a4"
-INPUT_SIZE = 768
+INPUT_SIZE = 512
 INSTALL_MESSAGE = (
     "The Meta mask model is unavailable. Run scripts/prepare_meta_model.py and restart."
 )
@@ -28,7 +28,7 @@ def model_info() -> dict | None:
         data = json.loads(manifest.read_text())
         if (
             data["model"] != MODEL_NAME
-            or data["input_size"] != INPUT_SIZE
+            or data["input_size"] not in (512, 768)
             or data["checkpoint_sha256"] != CHECKPOINT_SHA256
             or data["source_revision"] != SOURCE_REVISION
             or set(data["files"]) != {"encoder.onnx", "decoder.onnx"}
@@ -47,7 +47,7 @@ def model_info() -> dict | None:
         return {
             "name": MODEL_NAME,
             "sha256": fingerprint,
-            "input_size": INPUT_SIZE,
+            "input_size": data["input_size"],
             "checkpoint_sha256": CHECKPOINT_SHA256,
             "source_revision": SOURCE_REVISION,
         }
@@ -98,9 +98,11 @@ def coverage_points(guide: np.ndarray, seeds: np.ndarray) -> list:
     return positive
 
 
-def refine_mask(mask: np.ndarray, protected: np.ndarray) -> np.ndarray:
+def refine_mask(
+    mask: np.ndarray, protected: np.ndarray, input_size: int = INPUT_SIZE
+) -> np.ndarray:
     height, width = mask.shape
-    radius = max(1, round(max(height, width) / (INPUT_SIZE // 4)))
+    radius = max(1, round(max(height, width) / (input_size // 4)))
     pixels = np.round(protected.reshape(-1, 2) * [width - 1, height - 1]).astype(int)
     kernel = np.ones((radius * 2 + 1,) * 2, np.uint8)
     mask = cv2.morphologyEx(mask.astype(np.uint8), cv2.MORPH_CLOSE, kernel)
@@ -138,12 +140,14 @@ def propagate_mask(mask: np.ndarray, previous_gray: np.ndarray, gray: np.ndarray
     )
 
 
-def refine_tracked_mask(mask: np.ndarray, guide: np.ndarray) -> np.ndarray:
+def refine_tracked_mask(
+    mask: np.ndarray, guide: np.ndarray, input_size: int = INPUT_SIZE
+) -> np.ndarray:
     count, labels, stats, _ = cv2.connectedComponentsWithStats((guide > 0).astype(np.uint8))
     covered = np.bincount(labels[(mask > 0) & (guide > 0)], minlength=count)
     supported = covered / np.maximum(1, stats[:, cv2.CC_STAT_AREA]) >= 0.95
     supported[0] = False
-    radius = max(1, round(max(mask.shape) / (INPUT_SIZE // 4)))
+    radius = max(1, round(max(mask.shape) / (input_size // 4)))
     nearby = cv2.dilate(mask, np.ones((radius * 2 + 1,) * 2, np.uint8)) > 0
     return mask | ((supported[labels] & nearby & (guide > 0)).astype(np.uint8) * 255)
 
@@ -161,14 +165,15 @@ def predict_mask(
         raise ValueError(INSTALL_MESSAGE)
     if not len(seeds):
         raise ValueError("A Meta surface edit needs a grounded foreground point.")
+    size = info["input_size"]
     height, width = frame.shape[:2]
     normalized = polygon / [width - 1, height - 1]
     corners = [normalized.min(axis=0).tolist(), normalized.max(axis=0).tolist()]
     positive = coverage_points(guide, seeds)
     negative = protected.reshape(-1, 2).tolist()
-    coordinates = np.array([corners + positive + negative], np.float32) * INPUT_SIZE
+    coordinates = np.array([corners + positive + negative], np.float32) * size
     labels = np.array([[2, 3] + [1] * len(positive) + [0] * len(negative)], dtype=np.int32)
-    image = Image.fromarray(frame).resize((INPUT_SIZE, INPUT_SIZE), Image.Resampling.BILINEAR)
+    image = Image.fromarray(frame).resize((size, size), Image.Resampling.BILINEAR)
     values = np.asarray(image).astype(np.float32) / 255
     values = (values - np.array([0.485, 0.456, 0.406], np.float32)) / np.array(
         [0.229, 0.224, 0.225], np.float32
@@ -199,4 +204,4 @@ def predict_mask(
 
     if not hits(seeds).all() or hits(protected).any():
         raise ValueError("Meta couldn't protect the surrounding surfaces. Your reel is unchanged.")
-    return refine_mask(mask, protected)
+    return refine_mask(mask, protected, input_size=size)
