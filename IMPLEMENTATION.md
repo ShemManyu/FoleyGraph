@@ -229,6 +229,8 @@ inward and clip still-visible fabric. The grounding can move off the edge in
 later anchors; source color, connected components, Meta support and protection
 still gate recoloring. This never generates missing video pixels. New previews
 use `surface-v18` so cached edge gaps are not reused for an edit.
+Already-rendered older previews are not rewritten in place; a subsequent edit
+renders the current namespace.
 
 Each inference sees immutable original pixels, not another recolor or a title.
 Invalid weights, low-confidence output, missed foreground points, protected-point
@@ -1304,3 +1306,82 @@ left on device`. Frontend job `17581812030` could not pull its Node image
   functional pipeline `3005795385` was still running when inspected, not green.
   Earlier pipeline `3005523756` had a frontend runner-system failure and a
   still-running backend job. No pipeline protections were changed.
+
+### 2026-10-29: corrected source published and independently accessible
+
+- Private MR !11 merged as `00dbfb646a8408a9674219fa2406fd2fafc1f480`.
+  Public PR [#5](https://github.com/ShemManyu/FoleyGraph/pull/5) merged as
+  `45362117919be7443376c8fa63bc9c91b764be15`. Both used exact-head safeguards.
+- A new anonymous HTTPS fetch, with fresh HOME and disabled credential sources,
+  verified public main and byte parity for all **58 tracked files**. Only clean
+  tracked source was copied, never private Git history or untracked recordings.
+  The new public commit passed credential scanning.
+- Functional pipeline `3005795385` is **not green**: frontend job `17589229344`
+  failed before tests while pulling Node, with verified `no space left on
+  device` in the shared runner's containerd storage. Backend job `17589229342`
+  was still running. Local/native verification above is independent of CI;
+  no shared-runner cleanup or protection bypass was performed.
+- Deployment is next, using the existing-resource release command only.
+  Do not treat source publication as proof that the running worker changed.
+
+### 2026-10-29: crop correction deployed, fresh capture next
+
+- Deployment `5bd906ee-59bb-4fdc-a655-143652d48715` completed. Exact backend
+  `9248d6e6ceedba551fadce398d182de3dc322d2d8d502e37a926ec9f7ad713a5`,
+  existing frontend, HTTPS, Table Storage and Foundry readiness passed.
+  `/api/config` independently reports the expected `d36e9d...` Meta model,
+  input size 512. The serving worker was not prewarmed by a diagnostic render.
+- Used `scripts/deploy.py --skip-build --skip-provision`. No SKU, resource,
+  settings, secret or role changes.
+- The complete earlier take/movie is preserved as
+  `.data/showcase/meta-submission-attempt5-crop-edge/`, including failed-frame
+  evidence, original recordings and private workspace states. Nothing from it
+  will be substituted for a new production result.
+- Fresh recording will use the three explicit garment/title/music requests
+  and real MP4/cafe exports. Both actual color-result MP4s must pass all 150
+  independently grounded frame checks before publication. Owner-only WABA
+  authorization/workflow and event membership/track/submission remain blocked.
+
+### 2026-10-29: fresh recording rejected for an omitted music action
+
+- The corrected production worker accepted real asynchronous requests. The
+  terracotta edit completed at revision 1 after **179.346 seconds**. The next
+  request completed at revision 2 after **98.372 seconds**, adding the requested
+  title but **no music**, despite the model reply claiming both.
+- The recorder rejected this state instead of recording or publishing a false
+  success. A fresh authenticated lookup of this owned project confirmed the
+  saved title and `music=null`. The partial recording, workspace state and
+  retrieved project are preserved privately under
+  `.data/showcase/meta-submission-attempt6-missing-music/`.
+- The compound planner's omission is nondeterministic, not a missing music
+  renderer. Next correction: acknowledge successful edits from actual graph
+  changes, never free-form model claims, and clarify complete compound planning.
+  No music will be invented, silently substituted or represented as applied.
+  A regression will cover this exact mismatch before another real recording.
+
+### 2026-10-29: truthful saved-edit acknowledgements implemented
+
+- Successful chat replies are now generated from actual before/after graph
+  changes: look, title, music, original soundtrack and sound effects. A
+  title-only result says `Updated the title.`, never a model's unperformed
+  music claim. Clarifying/no-action replies and undo retain their existing flow.
+- Planning explicitly requires all requested supported compound actions and
+  distinguishes preserving work from resetting it. This improves instructions,
+  not a guarantee of perfect model intent coverage. Missing changes are not
+  heuristically invented or silently applied.
+- The existing real-render title tests now inject the exact misleading model
+  reply, require saved `music=null`, and require the truthful acknowledgement.
+  Both failed before the change. A deliberate old-reply mutation is included.
+  Verification and a new source review/deployment/recording remain pending.
+- The private recorder also retains each successful stage immediately, so a
+  later rejection cannot erase earlier genuine project-state evidence.
+- **Verified:** 78 backend cases, Python lint/format and all **35** deliberate
+  regression controls pass. Restoring the model's success reply makes both
+  title-render cases fail. Frontend and visual tracking code are unchanged.
+- **Real Foundry smoke:** the exact compound title/music request produced both
+  actions, a standalone music request produced only music, and a missing-color
+  request produced no edit. This is three planning controls with saved frames,
+  not an applied edit, filmed result or determinism claim. Dedicated-resource
+  credentials stayed in memory; no settings, roles or stored secrets changed.
+- Candidate backend:
+  `2a7c06f84a12a5195b23e8e1faf3b6e40e95a3b1f5422468db0b7c0afd3dcc2f`.
