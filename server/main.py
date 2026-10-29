@@ -1,4 +1,6 @@
+import asyncio
 import hashlib
+import json
 import logging
 import re
 import secrets
@@ -15,6 +17,7 @@ from urllib.parse import urlsplit
 
 from azure.core.exceptions import AzureError
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from itsdangerous import BadSignature, URLSafeTimedSerializer
@@ -101,13 +104,21 @@ def create_app(settings: Settings | None = None, store=None, director=None) -> F
     signer = URLSafeTimedSerializer(settings.workspace_secret, salt="foleygraph-workspace-v1")
     rate = RateLimiter()
     heavy_lock = threading.BoundedSemaphore(1)
+    edit_jobs = {}
+    active_edits = set()
     # Freeze this worker's identity before a deployment can replace files on disk.
     backend_revision = source_revision()
 
     @asynccontextmanager
     async def lifespan(_app):
         await run_in_threadpool(store.check)
-        yield
+        try:
+            yield
+        finally:
+            pending = tuple(active_edits)
+            for task in pending:
+                task.cancel()
+            await asyncio.gather(*pending, return_exceptions=True)
 
     app = FastAPI(
         title="FoleyGraph", version="1.0.0", lifespan=lifespan, docs_url=None, redoc_url=None
@@ -116,12 +127,15 @@ def create_app(settings: Settings | None = None, store=None, director=None) -> F
     app.state.studio = studio
     app.state.director = director
 
-    @contextmanager
-    def media_slot():
+    def reserve_media_slot():
         if not heavy_lock.acquire(blocking=False):
             raise HTTPException(
                 429, "The studio is processing another clip. Try again in a moment."
             )
+
+    @contextmanager
+    def media_slot():
+        reserve_media_slot()
         try:
             yield
         finally:
@@ -509,114 +523,178 @@ def create_app(settings: Settings | None = None, store=None, director=None) -> F
             after = director.analyze(before, preview_path(before, folder(before)), body.brief)
             return studio.commit(owner(request), before, after)
 
+    def edit_scene(workspace: str, before: Project, body: SceneDirectionRequest):
+        path = preview_path(before, folder(before))
+        direction = director.scene_direction(before, path, body)
+        if not direction.actions:
+            return {"project": before, "message": direction.message}
+        if direction.actions[0].type == "undo":
+            return {
+                "project": studio.undo(workspace, before.id, before.revision),
+                "message": "Done. Your last change is undone.",
+            }
+        after = before.model_copy(deep=True)
+        for action in direction.actions:
+            if action.type == "sound":
+                if body.object_id and action.object_id != body.object_id:
+                    raise ValueError("That edit must stay on the explicitly selected layer.")
+                if body.cue_id and action.cue_id != body.cue_id:
+                    raise ValueError("That edit must stay on the explicitly selected action.")
+                after = studio.apply_edit(
+                    after,
+                    EditRequest(
+                        revision=before.revision,
+                        object_id=action.object_id,
+                        cue_id=action.cue_id,
+                        operations=action.operations,
+                    ),
+                )
+            elif action.type == "music":
+                if action.enabled:
+                    after.music = MusicBed(
+                        gain_db=action.gain_db
+                        if action.gain_db is not None
+                        else (after.music.gain_db if after.music else -14)
+                    )
+                    if action.replace_original:
+                        after.source_audio_muted = True
+                else:
+                    after.music = None
+            elif action.type == "original_audio":
+                if not after.media.has_audio:
+                    raise ValueError("This clip has no original soundtrack.")
+                after.source_audio_muted = action.muted
+            elif action.type == "caption":
+                if action.text is None and after.caption is None:
+                    raise ValueError(
+                        "There is no editable title to remove. Text already embedded in "
+                        "the original footage cannot be erased here."
+                    )
+                after.caption = ReelCaption(text=action.text) if action.text else None
+            elif action.type == "recolor":
+                if action.effect_id:
+                    effect = next(
+                        (effect for effect in after.visual_edits if effect.id == action.effect_id),
+                        None,
+                    )
+                    if not effect:
+                        raise ValueError("That earlier color edit is no longer available.")
+                    effect.color = action.color
+                else:
+                    if len(after.visual_edits) >= 6:
+                        raise ValueError(
+                            "This reel already has six color selections. Reuse an existing one or undo a change."
+                        )
+                    selection = director.locate_color_target(
+                        before, folder(before) / "source.mp4", action.target
+                    )
+                    mask_model = mask_model_info()
+                    after.visual_edits.append(
+                        RecolorEffect(
+                            **selection.model_dump(),
+                            target=action.target,
+                            color=action.color,
+                            mask_model=mask_model["name"] if mask_model else "opencv",
+                            mask_model_sha256=mask_model["sha256"] if mask_model else None,
+                        )
+                    )
+            elif action.type == "sound_pass":
+                if after.objects:
+                    raise ValueError(
+                        "This reel already has sound layers. Ask for a specific change instead."
+                    )
+                after = director.analyze(after, path, action.brief)
+                if not after.cues:
+                    raise ValueError(
+                        "I couldn't find clear sound-producing actions in this shot. Try a color change or ambient music instead."
+                    )
+        after = Project.model_validate(after.model_dump())
+        library.validate(after)
+        prepare_preview(after, folder(before))
+        if after.music:
+            library.music_path(after)
+        return {
+            "project": studio.commit(workspace, before, after),
+            "message": direction.message,
+        }
+
+    async def run_edit_job(request, key, before, body):
+        interrupted = {
+            "status": "failed",
+            "error": "The edit was interrupted. Reload the reel before retrying.",
+            "error_status": 503,
+        }
+        try:
+            result = await run_in_threadpool(edit_scene, key[0], before, body)
+            edit_jobs[key] = {"status": "completed", "result": jsonable_encoder(result)}
+        except Exception as exc:
+            handler = next(
+                (
+                    app.exception_handlers[cls]
+                    for cls in type(exc).__mro__
+                    if cls in app.exception_handlers
+                ),
+                None,
+            )
+            if handler:
+                response = await handler(request, exc)
+                edit_jobs[key] = {
+                    "status": "failed",
+                    "error": json.loads(response.body)["detail"],
+                    "error_status": response.status_code,
+                }
+            else:
+                logger.warning("Background edit failed: %s", type(exc).__name__)
+                edit_jobs[key] = interrupted
+        finally:
+            if edit_jobs[key]["status"] == "processing":
+                edit_jobs[key] = interrupted
+            heavy_lock.release()
+
+    @app.get("/api/jobs/{job_id}")
+    async def edit_job(request: Request, job_id: str):
+        key = (owner(request), job_id)
+        if key not in edit_jobs:
+            raise NotFound(
+                "This edit status is no longer available. Reload the reel before retrying."
+            )
+        return edit_jobs[key]
+
     @app.post("/api/projects/{project_id}/direct")
-    def direct_scene(request: Request, project_id: str, body: SceneDirectionRequest):
+    async def direct_scene(request: Request, project_id: str, body: SceneDirectionRequest):
         workspace = owner(request)
-        before = studio.get(workspace, project_id, body.revision)
+        before = await run_in_threadpool(studio.get, workspace, project_id, body.revision)
         if body.object_id:
             studio.object(before, body.object_id)
         if body.cue_id and (
             not body.object_id or studio.cue(before, body.cue_id).object_id != body.object_id
         ):
             raise ValueError("Select an action on the selected object.")
-        with media_slot():
-            path = preview_path(before, folder(before))
-            direction = director.scene_direction(before, path, body)
-            if not direction.actions:
-                return {"project": before, "message": direction.message}
-            if direction.actions[0].type == "undo":
-                return {
-                    "project": studio.undo(workspace, project_id, before.revision),
-                    "message": "Done. Your last change is undone.",
-                }
-            after = before.model_copy(deep=True)
-            for action in direction.actions:
-                if action.type == "sound":
-                    if body.object_id and action.object_id != body.object_id:
-                        raise ValueError("That edit must stay on the explicitly selected layer.")
-                    if body.cue_id and action.cue_id != body.cue_id:
-                        raise ValueError("That edit must stay on the explicitly selected action.")
-                    after = studio.apply_edit(
-                        after,
-                        EditRequest(
-                            revision=before.revision,
-                            object_id=action.object_id,
-                            cue_id=action.cue_id,
-                            operations=action.operations,
-                        ),
-                    )
-                elif action.type == "music":
-                    if action.enabled:
-                        after.music = MusicBed(
-                            gain_db=action.gain_db
-                            if action.gain_db is not None
-                            else (after.music.gain_db if after.music else -14)
-                        )
-                        if action.replace_original:
-                            after.source_audio_muted = True
-                    else:
-                        after.music = None
-                elif action.type == "original_audio":
-                    if not after.media.has_audio:
-                        raise ValueError("This clip has no original soundtrack.")
-                    after.source_audio_muted = action.muted
-                elif action.type == "caption":
-                    if action.text is None and after.caption is None:
-                        raise ValueError(
-                            "There is no editable title to remove. Text already embedded in "
-                            "the original footage cannot be erased here."
-                        )
-                    after.caption = ReelCaption(text=action.text) if action.text else None
-                elif action.type == "recolor":
-                    if action.effect_id:
-                        effect = next(
-                            (
-                                effect
-                                for effect in after.visual_edits
-                                if effect.id == action.effect_id
-                            ),
-                            None,
-                        )
-                        if not effect:
-                            raise ValueError("That earlier color edit is no longer available.")
-                        effect.color = action.color
-                    else:
-                        if len(after.visual_edits) >= 6:
-                            raise ValueError(
-                                "This reel already has six color selections. Reuse an existing one or undo a change."
-                            )
-                        selection = director.locate_color_target(
-                            before, folder(before) / "source.mp4", action.target
-                        )
-                        mask_model = mask_model_info()
-                        after.visual_edits.append(
-                            RecolorEffect(
-                                **selection.model_dump(),
-                                target=action.target,
-                                color=action.color,
-                                mask_model=mask_model["name"] if mask_model else "opencv",
-                                mask_model_sha256=mask_model["sha256"] if mask_model else None,
-                            )
-                        )
-                elif action.type == "sound_pass":
-                    if after.objects:
-                        raise ValueError(
-                            "This reel already has sound layers. Ask for a specific change instead."
-                        )
-                    after = director.analyze(after, path, action.brief)
-                    if not after.cues:
-                        raise ValueError(
-                            "I couldn't find clear sound-producing actions in this shot. Try a color change or ambient music instead."
-                        )
-            after = Project.model_validate(after.model_dump())
-            library.validate(after)
-            prepare_preview(after, folder(before))
-            if after.music:
-                library.music_path(after)
-            return {
-                "project": studio.commit(workspace, before, after),
-                "message": direction.message,
-            }
+        preferences = {
+            value.strip().lower() for value in request.headers.get("prefer", "").split(",")
+        }
+        if "respond-async" not in preferences:
+            with media_slot():
+                return await run_in_threadpool(edit_scene, workspace, before, body)
+        reserve_media_slot()
+        while len(edit_jobs) >= 64:
+            del edit_jobs[next(iter(edit_jobs))]
+        job_id = new_id()
+        key = (workspace, job_id)
+        edit_jobs[key] = {"status": "processing"}
+        task = asyncio.create_task(run_edit_job(request, key, before, body))
+        active_edits.add(task)
+        task.add_done_callback(active_edits.discard)
+        status_url = f"/api/jobs/{job_id}"
+        return JSONResponse(
+            {"status": "processing", "status_url": status_url},
+            status_code=202,
+            headers={
+                "Location": status_url,
+                "Preference-Applied": "respond-async",
+                "Retry-After": "1",
+            },
+        )
 
     @app.post("/api/projects/{project_id}/command")
     def command(request: Request, project_id: str, body: CommandRequest):

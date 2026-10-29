@@ -208,6 +208,11 @@ export class ApiError extends Error {
   }
 }
 
+type EditJob<T> =
+  | { status: "processing" }
+  | { status: "completed"; result: T }
+  | { status: "failed"; error: string; error_status: number };
+
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   if (typeof init.body === "string")
@@ -227,6 +232,29 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
           ? detail.map((entry: { msg: string }) => entry.msg).join("; ")
           : `The request failed (${response.status}). Please retry.`;
     throw new ApiError(message, response.status);
+  }
+  if (response.status === 202) {
+    const statusUrl = data?.status_url;
+    if (
+      typeof statusUrl !== "string" ||
+      !/^\/api\/jobs\/[a-f0-9]{32}$/.test(statusUrl)
+    )
+      throw new ApiError(
+        "The edit status is unavailable. Reload the reel before retrying.",
+        503,
+      );
+    const deadline = Date.now() + 10 * 60 * 1000;
+    while (Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      const job = await api<EditJob<T>>(statusUrl, { signal: init.signal });
+      if (job.status === "completed") return job.result;
+      if (job.status === "failed")
+        throw new ApiError(job.error, job.error_status);
+    }
+    throw new ApiError(
+      "The edit is taking longer than expected. Reload the reel before retrying; it may already be saved.",
+      504,
+    );
   }
   return data as T;
 }

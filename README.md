@@ -153,6 +153,12 @@ Chat history is saved in this browser, not exported with bundles. The last 12 me
 are sent with the next direction to support follow-ups. A phone-sized workspace keeps
 the video, latest messages, and composer in view, including when the keyboard opens.
 
+CPU edits can take several minutes on B1. Chat submits a private background job and
+waits for the validated result before showing success. Completed projects remain
+durable, but job receipts are process-local. After a restart or interrupted wait,
+reload the reel and check its revision before retrying. The runbook documents the
+polling API and single-worker limit.
+
 Web browsers cannot force Instagram or WhatsApp as a native share target or confirm
 publication. The app prepares the file before the share tap to preserve browser user
 activation, and never claims the video was posted. No social account tokens are stored.

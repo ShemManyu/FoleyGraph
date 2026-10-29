@@ -500,7 +500,7 @@ def prepare_preview(project: Project, folder: Path) -> Path:
     tracks = [RecolorTrack(effect) for effect in project.visual_edits]
     first_frame = None
     uses_meta = any(effect.mask_model == "sam2.1-hiera-tiny" for effect in project.visual_edits)
-    deadline = time.monotonic() + (180 if uses_meta else 120)
+    deadline = time.monotonic() + (300 if uses_meta else 120)
     try:
         metadata = next(reader)
         width, height = metadata["size"]

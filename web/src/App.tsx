@@ -893,12 +893,13 @@ export default function App() {
         : undefined;
     say("user", direction, scope);
     void run(
-      "Making your edit",
+      "Making your edit. This can take a few minutes.",
       () =>
         api<{ project: Project; message: string }>(
           `/api/projects/${current.id}/direct`,
           {
             method: "POST",
+            headers: { Prefer: "respond-async" },
             body: JSON.stringify({
               revision: current.revision,
               object_id: advanced ? selected?.id : null,
