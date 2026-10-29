@@ -10,6 +10,7 @@ external sound-generation API.
 
 For complete startup, configuration, architecture, deployment, and troubleshooting
 instructions, see the [implementation and operator runbook](IMPLEMENTATION.md).
+The clean public source is at <https://github.com/ShemManyu/FoleyGraph>.
 
 ## What works
 
@@ -111,6 +112,8 @@ editor explicitly reports manual mode; no fabricated AI output is substituted.
 The [reviewed CPU bundle](https://github.com/ShemManyu/FoleyGraph/releases/tag/meta-sam2.1-cpu-v1)
 is public. Reproducible export instructions and the latest download verification are in
 [the runbook](IMPLEMENTATION.md#optional-meta-sam-21-masks).
+The installer uses an identical, versioned mirror on the project's existing Azure
+Storage website, with no login or model account required.
 
 ```bash
 .venv/bin/python scripts/prepare_meta_model.py

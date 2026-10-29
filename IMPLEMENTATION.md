@@ -15,7 +15,7 @@ Deployed application: <https://foleygraph-fokas.azurewebsites.net>
 
 | Requirement                                         | Notes                                                                      |
 | --------------------------------------------------- | -------------------------------------------------------------------------- |
-| Repository access                                   | The GitLab repository is private.                                          |
+| Repository access                                   | [Public source on GitHub](https://github.com/ShemManyu/FoleyGraph).        |
 | Python 3.11 or 3.12                                 | Azure runs Python 3.12; local verification also uses 3.11.                 |
 | Node.js 22.13 or newer in the 22.x series, with npm | Required by the locked frontend/build/lint dependencies.                   |
 | A modern browser                                    | Chrome/Chromium is used for automated browser checks.                      |
@@ -33,7 +33,7 @@ visual understanding, and speech transcription require configured Azure OpenAI.
 For a fresh checkout:
 
 ```bash
-git clone https://gitlab.com/fokas-labs/folio.git foleygraph
+git clone https://github.com/ShemManyu/FoleyGraph.git foleygraph
 cd foleygraph
 ```
 
@@ -183,6 +183,9 @@ is public. Stop the application and run:
 
 Download mode verifies the two reviewed ONNX hashes, retains Meta's license,
 and writes the manifest last. It needs no Torch installation or model account.
+The default download uses the identical
+[versioned Azure mirror](https://foleygraphfokas1029.z20.web.core.windows.net/models/meta-sam2.1-cpu-v1/manifest.json);
+GitHub retains the reviewed release as a second public distribution.
 Allow time for the transfer: progress is reported every 10 MiB, and each file has
 a 15-minute transfer budget plus a 30-second socket inactivity timeout.
 Approximately 126 MB is installed under
@@ -772,3 +775,31 @@ left on device`. Frontend job `17581812030` could not pull its Node image
 - **Deployment:** still the old runtime. Next: finish public snapshot/download
   verification, merge the approved feature, deploy the existing resources, and
   verify the actual B1 model-backed edit before recording.
+
+### 2026-10-29: clean public source and bounded-download mirror
+
+- **Public source:** [PR #1](https://github.com/ShemManyu/FoleyGraph/pull/1)
+  contains the application tree without private Git history, local workspaces,
+  model binaries, or recordings. Secret scanning of that clean history found
+  no credentials. Fresh-clone instructions now use the public GitHub URL.
+- **Network diagnosis:** a separate anonymous 1 MiB GitHub range request took
+  `48.45s` on this connection. The second full GitHub transfer was stopped,
+  not reported as successful. The same range from Azure took `2.95s`.
+  These are single range measurements, not guaranteed sustained throughput.
+- **Mirror:** enabled static website hosting on the already dedicated
+  `foleygraphfokas1029` account and uploaded only the four reviewed model files
+  under `models/meta-sam2.1-cpu-v1/`. No existing `$web` container was present.
+  `allowBlobPublicAccess` remains `false`; table/project persistence is not
+  exposed by enabling the separate public website endpoint.
+- **Operator access:** storage website writes require Blob Data Contributor
+  or management permission for Azure CLI's `--auth-mode key` lookup. The
+  account key was not printed, stored in the repository, or supplied in a URL.
+  Do not upload workspaces, credentials, or raw capture traces to `$web`.
+- **Installer:** now uses the versioned Azure mirror by default, retaining
+  the reviewed hashes, size cap, 30-second inactivity timeout, and bounded
+  15-minute transfer budget. A full fresh anonymous installation is next.
+- **CI:** functional pipeline `3004913448` also failed because of runner disk
+  exhaustion, confirmed in backend job `17582405560` and frontend job
+  `17582405561`. This is not a successful CI run.
+- **Next:** verify the fresh mirror installation and public/runtime source
+  parity, merge the source PR/MR, deploy, and measure a real B1 edit.
