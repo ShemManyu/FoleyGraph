@@ -20,12 +20,12 @@ OUTPUT = ROOT / "server" / "assets" / "models" / NAME
 SOURCE = "2b90b9f5ceec907a1c18123530e92e794ad901a4"
 CHECKPOINT = "https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_tiny.pt"
 CHECKPOINT_SHA256 = "7402e0d864fa82708a20fbd15bc84245c2f26dff0eb43a4b5b93452deb34be69"
-RELEASE = "https://foleygraphfokas1029.z20.web.core.windows.net/models/meta-sam2.1-cpu-v1"
+RELEASE = "https://foleygraphfokas1029.z20.web.core.windows.net/models/meta-sam2.1-cpu-v2"
 FILES = {
-    "encoder.onnx": "3c2dd364d9456607dfe998606d2f2e5d9489c2fe989f7b90d3cc45dac9b03baf",
-    "decoder.onnx": "449b74212109eb200517f002e1237bc8cc611d970dd30d229ba7907884f458d6",
+    "encoder.onnx": "1d8d9009d2ec9dc4380a2509822726a692e515859cd6e3f3f855a5d632fd9565",
+    "decoder.onnx": "69921d6f3303706d9e23202561d42536fc8b77f02d862b65424998ac0d64f8d1",
 }
-SIZE = 768
+SIZE = 512
 
 
 def checksum(path: Path) -> str:
