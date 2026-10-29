@@ -11,6 +11,30 @@ WhatsApp reply. Native sharing is not WABA automation.
 
 Deployed application: <https://foleygraph-fokas.azurewebsites.net>
 
+## Current verified delivery
+
+[Watch the 2:40 demo](https://foleygraphfokas1029.z20.web.core.windows.net/demos/meta-sam2-fa695defd810/),
+[download the MP4](https://foleygraphfokas1029.z20.web.core.windows.net/demos/meta-sam2-fa695defd810/FoleyGraph-demo.mp4)
+or [inspect sanitized evidence](https://foleygraphfokas1029.z20.web.core.windows.net/demos/meta-sam2-fa695defd810/evidence.json).
+The film uses real production UI and licensed moving stock, genuine Meta image
+masks, actual chat-driven edits and MP4 exports. All 150 frames in both recorded
+recolor outputs passed independent source-color-guide checks, not a semantic
+accuracy benchmark. Public playback, seeking and 35 captions passed anonymous
+desktop and mobile-viewport Chromium checks. This is not a physical-phone test.
+
+Production backend is `2a7c06f8...`, with the 512-pixel `d36e9d...` model and
+`surface-v18` previews. The latest local backend checks passed 78 tests and 35
+deliberate regression controls. Shared-runner installation failures are not
+described as green CI. The chronological checkpoints below retain earlier
+failed attempts and superseded statuses deliberately.
+
+**Still requiring owner input:** an agreed WhatsApp business workflow and
+business details plus authorized WABA sender, recipient and credentials.
+The adapter/workflow must then be implemented and genuinely validated, not just
+configured. Team membership, exactly one Indie Developer/Startup track, accepted
+participation, model eligibility confirmation and the final event submission
+also remain owner actions. No submission form has been sent.
+
 ## 1. Prerequisites
 
 | Requirement                                         | Notes                                                                      |
@@ -153,7 +177,7 @@ Open **People & style > Try the demo**, then send these as three separate
 messages, waiting for each edit to finish before sending the next:
 
 ```text
-The guy on the left should be terracotta.
+Make the left man's clothes terracotta.
 Add the title 'WEEKEND, REMIXED' and warm ambient music.
 Make his outfit sage green instead. Keep the title and music.
 ```
@@ -560,7 +584,8 @@ OpenAI and storage also incur usage charges.
 | AI unavailable                                      | Set the endpoint/deployment and valid key or Entra identity. Manual mode is expected without them.                                                                   |
 | Foundry `401`, `403`, or deployment-not-found error | Check the correct resource, credential/RBAC access, and deployment name. Do not copy another project's key or rotate a shared resource to fix this app.              |
 | Studio busy / `429`                                 | Only one heavy operation runs at a time. Wait; avoid repeated submissions. Model quota can independently cause `429`.                                                |
-| Edit seems slow                                     | Meta CPU editing can take minutes on B1. Processing is bounded to 180 seconds (CV-only: 120); unchanged source encodings are cached for follow-ups. Use short clips. |
+| Edit seems slow                                     | Meta preview processing is bounded to 300 seconds (CV-only: 120), plus planning/finalization overhead. B1 edits can take minutes; use the async workflow and short clips. |
+| Only part of a compound request applied             | Successful replies name only saved changes. Inspect the result, then explicitly request the missing action after completion. Never blindly resubmit an uncertain job. |
 | Stale revision / `409`                              | Reload the latest project before resubmitting. Do not overwrite another revision blindly.                                                                            |
 | Surface cannot be isolated                          | The edit is rejected rather than fabricated. Use people footage for outfit edits; pale cup/saucer separation remains difficult.                                      |
 | Meta model unavailable or hash mismatch             | Prepare the reviewed matching bundle, verify `/api/config`, and restart. Missing optional assets do not make an existing Meta-tagged project a CV project.           |
@@ -1385,3 +1410,126 @@ left on device`. Frontend job `17581812030` could not pull its Node image
   credentials stayed in memory; no settings, roles or stored secrets changed.
 - Candidate backend:
   `2a7c06f84a12a5195b23e8e1faf3b6e40e95a3b1f5422468db0b7c0afd3dcc2f`.
+
+### 2026-10-29: truthful-reply source published, CI distinction preserved
+
+- Private MR !12 merged as `6d662856450d706d06dfc0a396afc8260ef90e0e`.
+  Public PR [#6](https://github.com/ShemManyu/FoleyGraph/pull/6) merged as
+  `fa19f83a42d269e777bf2ef1d09011cc9e4fd7f4`, with exact-head guards.
+- Credential scanning passed. A fresh credential-free HTTPS fetch verified
+  public main and all **58 tracked files** against the tested source.
+- CI pipeline `3005898786` is **not green**. Frontend job `17589983900`
+  passed. Backend job `17589983899` failed **before tests**, while installing
+  ONNX Runtime, with verified `OSError: [Errno 28] No space left on device`.
+  This is shared-runner storage exhaustion, not a test result. Local 78-case
+  and 35-control checks above remain separate evidence.
+- An omitted compound action is still possible. The app now names only the
+  changes actually saved; ask separately for an omitted change. The prompt's
+  successful three-case smoke does not make model intent deterministic.
+  Exact deployment and a new complete recording are next.
+
+### 2026-10-29: truthful-reply release deployed and independently ready
+
+- Deployment `6710ad43-d874-434b-8618-862ac9807887` completed. Readiness
+  independently verified backend `2a7c06f8...`, Azure Table Storage, Foundry,
+  unchanged frontend and the expected 512-pixel `d36e9d...` Meta model.
+  Existing-resource deployment only; no settings, roles, secrets or SKU changes.
+- The new recorder retains stage states as soon as they complete. If a
+  **completed** title result explicitly has no music, it may show one new,
+  visible `Add warm ambient music.` follow-up. This is not a hidden retry,
+  invented edit or resubmission of an uncertain job. Both waits and the
+  follow-up must appear in the film/evidence if used. Any remaining mismatch
+  still rejects the take.
+- Final-stage guards now require this verified backend plus exact MP4/project
+  hashes, both 150-frame independent-grounding checks, duration/decode/audio
+  checks and final mixed-audio ASR. Nothing has been publicly uploaded yet.
+
+### 2026-10-29: complete fresh production capture and truthful acknowledgements
+
+- The new unmocked App Service capture completed on backend `2a7c06f8...`.
+  The three actual saved revisions recolored the outfit terracotta, added both
+  the title and ambient music, then changed that same outfit to sage while
+  retaining the title/music. The optional music follow-up was not needed.
+  Acknowledgements accurately reported the saved changes.
+- Actual waits were 178.610s, 104.374s and 86.944s respectively; the finished
+  MP4 export took 6.042s. These are B1 CPU observations, not an instant-edit claim.
+- Capture-only verification passed: both licensed sources remain byte-identical,
+  all three finished exports decode, the coffee pour measures -3.0000005dB,
+  and ceramic/room-tone WAVs are byte-identical before and after the edit.
+  The finished six-second reel hashes to `df0c62a580f5...`.
+- Full independent motion checks for **both actual recorded color MP4s**,
+  final film composition/review and public publication remain separate gates.
+  Raw workspaces and project bundles stay private.
+
+### 2026-10-29: both actual recorded recolors passed full-frame motion gates
+
+- Independent verification checked all 150 frames in each **actual production**
+  preview against the exact saved graph and unchanged stock source. Both used
+  the expected 512-pixel Meta bundle and eight actual local diagnostic model
+  calls, with 100% minimum raw source-color guide coverage.
+- Minimum recorded visible-guide coverage was 99.6627% for terracotta and
+  99.7510% for sage. Maximum right-strip codec comparison error was 2.770 and
+  2.636 respectively, below the unchanged 3.0 gate. These are hash-bound
+  source-color-guide diagnostics, **not semantic mask accuracy scores**.
+- Reviewed both motion contact sheets and source/actual comparisons at the
+  formerly defective frames 6 and 7. The bottom blue strip is gone; faces and
+  the neighboring outfit remain visually retained. Thin boundary fringes and
+  approximate masks remain limitations, not a promise of perfect rotoscoping.
+- The film can now be composed from this successful production capture.
+  Diagnostic rerenders are evidence only, never replacement demo footage.
+
+### 2026-10-29: final film verified and reviewed before publication
+
+- The successful capture produced an 11-chapter, 1920x1080 film lasting
+  **160.39 seconds** (`fa695defd810...`), below three minutes. Full decode
+  succeeded, clipped audio samples are zero, and actual final-mix transcription
+  matches the narration at 98.42%. All 35 subtitle blocks match the script;
+  the longest line is 42 characters.
+- Reviewed the full storyboard plus readable color, sound and contribution
+  chapters. The film shows actual mobile-sized production UI, licensed moving
+  stock, visible garment changes, preserved title/music, a real MP4 download,
+  isolated sound editing and explicit event-built versus upstream attribution.
+  Looped close-ups, condensed waits and synthetic narration are disclosed.
+- **Panel-style critique:** the strongest evidence is a real moving edit and
+  independently verified untouched sound layers, not a narrated mockup.
+  Remaining weaknesses are multi-minute B1 editing latency, approximate mask
+  edges and a creator workflow rather than live WABA business automation.
+  This is a credible editor demonstration, not proof of a winning submission
+  or a completed WhatsApp business solution. Physical-phone sharing and
+  human listening-panel review are not claimed.
+- Curated staging, anonymous public playback/seek/caption checks, final source
+  documentation parity and owner-only submission details remain.
+
+### 2026-10-29: curated assets published and anonymously byte-verified
+
+- Nine explicitly whitelisted, credential-scanned public assets are now under
+  `demos/meta-sam2-fa695defd810/` on the existing Azure Storage website.
+  No raw captures, project ZIPs, cookies or authenticated workspaces were
+  uploaded. No resource settings, roles or access policies were changed.
+- Anonymous HTTPS retrieval verified every published byte/hash and MIME type,
+  including the 36,507,135-byte movie. Its HTTP range probe returned `206`
+  and the exact requested first 1,024 bytes.
+- [Public demo page](https://foleygraphfokas1029.z20.web.core.windows.net/demos/meta-sam2-fa695defd810/),
+  [direct MP4](https://foleygraphfokas1029.z20.web.core.windows.net/demos/meta-sam2-fa695defd810/FoleyGraph-demo.mp4)
+  and [sanitized evidence](https://foleygraphfokas1029.z20.web.core.windows.net/demos/meta-sam2-fa695defd810/evidence.json)
+  are live. Real anonymous browser playback, seeking, captions and responsive
+  layout are the next independent checks, not inferred from HTTP success.
+
+### 2026-10-29: public playback, seeking and captions verified
+
+- Fresh anonymous Chromium contexts at 1280px and 390px viewport widths loaded
+  and played the public 1920x1080 movie, then decoded seeks at 36s, 106.4s
+  and the contribution-caption interval. Both received genuine `206` media
+  responses and displayed the expected active English contribution caption.
+- All 35 captions loaded. Neither layout overflowed horizontally, and no page
+  errors occurred. Reviewed both public-page screenshots. Automated playback
+  was muted; actual final-mix ASR/signal checks are separate evidence, not a
+  human listening or physical-phone sharing claim.
+- README and the current-delivery overview now expose the verified page, direct
+  MP4, live app and sanitized evidence. The troubleshooting table now correctly
+  states the 300-second Meta preview deadline, and explains truthful partial
+  results without suggesting blind retries.
+- Application source and runtime remain unchanged from the verified release.
+  Final documentation merge/public-source parity are the remaining delivery
+  operations. WABA implementation/authorization and event owner details remain
+  explicitly blocked rather than fabricated.
