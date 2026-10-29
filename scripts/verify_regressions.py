@@ -11,6 +11,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import server.director as director_module  # noqa: E402
+import server.main as main_module  # noqa: E402
 import server.segmentation as segmentation_module  # noqa: E402
 import server.studio as studio_module  # noqa: E402
 import server.visual as visual_module  # noqa: E402
@@ -24,6 +25,24 @@ def main():
         "test_off_white_clothing_recolors_across_lighting_without_changing_the_other_person"
     )
     cases = (
+        (
+            main_module,
+            main_module,
+            "create_app",
+            "key = (owner(request), job_id)",
+            'key = next((key for key in edit_jobs if key[1] == job_id), ("", ""))',
+            "tests/test_scene_edits.py::test_async_edit_returns_before_work_finishes_and_is_private_and_exclusive",
+            "exposing a processing receipt to another workspace",
+        ),
+        (
+            main_module,
+            main_module,
+            "create_app",
+            'heavy_lock.release()\n\n    @app.get("/api/jobs/{job_id}")',
+            'pass\n\n    @app.get("/api/jobs/{job_id}")',
+            "tests/test_scene_edits.py::test_async_failures_preserve_the_scene_and_release_processing_capacity",
+            "leaking the processing permit after a background failure",
+        ),
         (
             visual_module,
             visual_module.RecolorTrack,
@@ -64,10 +83,19 @@ def main():
             visual_module,
             visual_module,
             "prepare_preview",
+            "300 if uses_meta else 120",
             "180 if uses_meta else 120",
-            "120",
             "tests/test_scene_edits.py::test_meta_cpu_budget_allows_measured_work_but_remains_bounded",
-            "aborting measured B1 Meta work at the CV-only deadline",
+            "aborting long Meta work at the old synchronous deadline",
+        ),
+        (
+            visual_module,
+            visual_module,
+            "prepare_preview",
+            "300 if uses_meta else 120",
+            "1000000",
+            "tests/test_scene_edits.py::test_meta_cpu_budget_allows_measured_work_but_remains_bounded",
+            "removing the Meta and CV render deadlines",
         ),
         (
             segmentation_module,

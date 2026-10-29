@@ -2,6 +2,8 @@ import base64
 import io
 import json
 import shutil
+import threading
+import time
 import zipfile
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -16,12 +18,12 @@ from openai import RateLimitError
 from PIL import Image, ImageDraw
 
 import server.director as director_module
+import server.main as main_module
 import server.visual as visual_module
 from server.audio import SAMPLE_RATE, render_layers, wav_bytes
 from server.config import Settings
 from server.demo import DEMO_ASSETS, STYLE_FILENAME
 from server.director import Director
-from server.main import create_app
 from server.media import run_ffmpeg
 from server.models import (
     CaptionAction,
@@ -94,7 +96,7 @@ class SceneDirector:
 def editing_client(tmp_path, monkeypatch):
     monkeypatch.setattr("server.main.mask_model_info", lambda: None)
     director = SceneDirector()
-    app = create_app(
+    app = main_module.create_app(
         Settings(
             data_dir=tmp_path / "app",
             storage_account="",
@@ -105,6 +107,37 @@ def editing_client(tmp_path, monkeypatch):
     )
     with TestClient(app) as client:
         yield client, director
+
+
+@pytest.fixture
+def blocked_direction(editing_client, monkeypatch):
+    _, director = editing_client
+    original = director.scene_direction
+    entered, release = threading.Event(), threading.Event()
+
+    def blocked(*args):
+        entered.set()
+        if not release.wait(5):
+            raise RuntimeError("The test did not release its processing gate.")
+        return original(*args)
+
+    monkeypatch.setattr(director, "scene_direction", blocked)
+    try:
+        yield entered, release
+    finally:
+        release.set()
+
+
+def finished_job(client, url):
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        response = client.get(url)
+        assert response.status_code == 200, response.text
+        job = response.json()
+        if job["status"] != "processing":
+            return job
+        time.sleep(0.01)
+    pytest.fail("The accepted edit did not finish.")
 
 
 @pytest.fixture
@@ -300,7 +333,7 @@ def test_meta_render_samples_original_pixels_before_other_edits(
 
 @pytest.mark.parametrize(
     ("meta", "elapsed", "succeeds"),
-    [(True, 150, True), (True, 190, False), (False, 150, False)],
+    [(True, 240, True), (True, 320, False), (False, 150, False)],
 )
 def test_meta_cpu_budget_allows_measured_work_but_remains_bounded(
     monkeypatch, people_video, tmp_path, meta, elapsed, succeeds
@@ -1060,3 +1093,152 @@ def test_model_capacity_errors_are_retryable_without_losing_the_scene(editing_cl
         json={"revision": 0, "instruction": "Change the cup's color"},
     )
     assert retried.status_code == 200 and retried.json()["project"]["revision"] == 0
+
+
+def test_async_edit_returns_before_work_finishes_and_is_private_and_exclusive(
+    editing_client, blocked_direction
+):
+    client, director = editing_client
+    scene = client.post("/api/demo").json()
+    root = f"/api/projects/{scene['id']}"
+    director.direction = SceneDirection(
+        message="The cup is quieter.",
+        actions=[
+            SoundAction(
+                type="sound", object_id="cup", operations=[Operation(type="gain", value=-3)]
+            )
+        ],
+    )
+    entered, release = blocked_direction
+    body = {"revision": 0, "instruction": "Make the cup quieter"}
+    accepted = client.post(f"{root}/direct", headers={"Prefer": "respond-async"}, json=body)
+    assert accepted.status_code == 202, accepted.text
+    assert "project" not in accepted.json()
+    status_url = accepted.json()["status_url"]
+    assert accepted.headers["location"] == status_url
+    assert entered.wait(2)
+    assert client.get(status_url).json()["status"] == "processing"
+    assert client.get(root).json() == scene
+    assert (
+        client.post(f"{root}/direct", headers={"Prefer": "respond-async"}, json=body).status_code
+        == 429
+    )
+    cookies = httpx.Cookies(client.cookies)
+    try:
+        client.cookies.clear()
+        assert client.get(status_url).status_code == 404
+    finally:
+        client.cookies = cookies
+        release.set()
+    completed = finished_job(client, status_url)
+    assert completed["status"] == "completed", completed
+    changed = completed["result"]["project"]
+    assert changed["revision"] == 1
+    assert next(obj for obj in changed["objects"] if obj["id"] == "cup")["gain_db"] == -3
+    assert changed["cues"] == scene["cues"]
+    assert client.get(root).json() == changed
+    renamed = client.patch(root, json={"revision": 1, "name": "A later edit"}).json()
+    assert renamed["revision"] == 2
+    assert client.get(status_url).json() == completed
+    director.direction = SceneDirection(message="What next?")
+    assert client.post(f"{root}/direct", json={**body, "revision": 2}).status_code == 200
+
+
+@pytest.mark.parametrize(
+    ("failure", "status"), [("render", 422), ("capacity", 429), ("unexpected", 503)]
+)
+def test_async_failures_preserve_the_scene_and_release_processing_capacity(
+    editing_client, monkeypatch, failure, status
+):
+    client, director = editing_client
+    scene = client.post("/api/demo").json()
+    root = f"/api/projects/{scene['id']}"
+    director.direction = SceneDirection(
+        message="The cup is quieter.",
+        actions=[
+            SoundAction(
+                type="sound", object_id="cup", operations=[Operation(type="gain", value=-3)]
+            )
+        ],
+    )
+    body = {"revision": 0, "instruction": "Make the cup quieter"}
+
+    def fail(*args):
+        if failure == "render":
+            raise ValueError("This color edit took too long. Try a shorter clip.")
+        if failure == "capacity":
+            raise RateLimitError(
+                "private-provider-details",
+                response=httpx.Response(
+                    429, request=httpx.Request("POST", "https://example.invalid/director")
+                ),
+                body={},
+            )
+        raise RuntimeError("private-provider-details")
+
+    with monkeypatch.context() as patch:
+        if failure == "render":
+            patch.setattr(main_module, "prepare_preview", fail)
+        else:
+            patch.setattr(director, "scene_direction", fail)
+        accepted = client.post(f"{root}/direct", headers={"Prefer": "respond-async"}, json=body)
+        assert accepted.status_code == 202, accepted.text
+        job = finished_job(client, accepted.json()["status_url"])
+    assert job["status"] == "failed" and job["error_status"] == status
+    assert "private-provider-details" not in json.dumps(job)
+    assert client.get(root).json() == scene
+    retried = client.post(f"{root}/direct", json=body)
+    assert retried.status_code == 200, retried.text
+    assert retried.json()["project"]["revision"] == 1
+
+
+def test_async_completion_cannot_overwrite_a_newer_revision(editing_client, blocked_direction):
+    client, director = editing_client
+    scene = client.post("/api/demo").json()
+    root = f"/api/projects/{scene['id']}"
+    director.direction = SceneDirection(message="Music is on.", actions=[MusicAction(type="music")])
+    entered, release = blocked_direction
+    accepted = client.post(
+        f"{root}/direct",
+        headers={"Prefer": "respond-async"},
+        json={"revision": 0, "instruction": "Add ambient music"},
+    )
+    assert accepted.status_code == 202
+    assert entered.wait(2)
+    try:
+        renamed = client.patch(root, json={"revision": 0, "name": "Saved in another tab"})
+        assert renamed.status_code == 200
+    finally:
+        release.set()
+    job = finished_job(client, accepted.json()["status_url"])
+    assert job["status"] == "failed" and job["error_status"] == 409
+    assert client.get(root).json() == renamed.json()
+    assert renamed.json()["music"] is None
+
+
+def test_async_receipts_can_expire_without_losing_the_saved_reel(editing_client):
+    client, director = editing_client
+    scene = client.post("/api/demo").json()
+    root = f"/api/projects/{scene['id']}"
+    director.direction = SceneDirection(message="Music is on.", actions=[MusicAction(type="music")])
+    accepted = client.post(
+        f"{root}/direct",
+        headers={"Prefer": "respond-async"},
+        json={"revision": 0, "instruction": "Add ambient music"},
+    )
+    assert accepted.status_code == 202
+    status_url = accepted.json()["status_url"]
+    job = finished_job(client, status_url)
+    assert job["status"] == "completed"
+    restarted_app = main_module.create_app(client.app.state.settings, director=director)
+    with TestClient(restarted_app) as restarted:
+        restarted.cookies = client.cookies
+        missing = restarted.get(status_url)
+        assert missing.status_code == 404 and "Reload" in missing.json()["detail"]
+        assert restarted.get(root).json() == job["result"]["project"]
+        stale = restarted.post(
+            f"{root}/direct",
+            headers={"Prefer": "respond-async"},
+            json={"revision": 0, "instruction": "Add ambient music"},
+        )
+        assert stale.status_code == 409

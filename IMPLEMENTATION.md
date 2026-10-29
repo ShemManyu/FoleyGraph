@@ -233,9 +233,11 @@ The encoder also caches up to eight identical resized original frames in memory,
 keyed by pixels, input size and model fingerprint. Follow-up colors or titles can
 reuse those features; prompts, decoder output, confidence and protection checks
 are still evaluated anew. The cache is bounded, process-local and lost at restart.
-Meta preview processing has a 180-second deadline; CV-only processing retains
+Meta preview processing has a 300-second deadline; CV-only processing retains
 120 seconds. Model loading, planning and output finalization add overhead, so
 these are not total request-latency guarantees. Short clips are recommended on B1.
+The browser uses the asynchronous edit workflow below so those waits do not
+depend on one long HTTP connection.
 
 #### Reproduce the conversion instead of downloading
 
@@ -356,6 +358,7 @@ Interactive Swagger/ReDoc pages are disabled. The machine-readable schema is at
 | `POST /api/demo?scene=coffee`     | Create the prepared cafe demo. The API's omitted-scene default is coffee. |
 | `POST /api/projects`              | Upload a video as multipart `file`.                                       |
 | `POST /api/projects/{id}/direct`  | Apply conversational direction.                                           |
+| `GET /api/jobs/{job_id}`          | Poll a private, process-local asynchronous edit receipt.                  |
 | `POST /api/projects/{id}/exports` | Create MP4, WAV mix, project JSON, and portable ZIP.                      |
 | `POST /api/projects/import`       | Import a portable ZIP as multipart `file`.                                |
 
@@ -377,6 +380,34 @@ A clarification can return HTTP `200` with an unchanged revision. Verify the
 returned project and revision, not just the HTTP status.
 The export endpoint requires a JSON body, for example `{"revision": 1}`;
 omitting the body returns `422`.
+
+The browser sends `Prefer: respond-async` to `/direct`. Integrators can send the
+same header. Acceptance returns HTTP `202` with `status: "processing"` and a
+same-origin `status_url`, also supplied in `Location`. Keep the workspace cookie
+and poll that URL about once a second:
+
+```json
+{"status": "completed", "result": {"project": {}, "message": "..."}}
+```
+
+The completed result contains the full real project, abbreviated above.
+While work runs, polling returns `{"status": "processing"}`. A late failure
+returns `status: "failed"`, a safe `error` message, and the original `error_status`
+such as `422`, `409`, or `429`. Polling itself returns `200` for known receipts;
+`202` is acceptance, never proof that the edit applied. Omitting the preference
+retains the original synchronous API, which is not recommended for slow CPU
+recolors across App Service's HTTP timeout.
+
+There is **no durable task queue**. At most 64 recent receipts live in the single
+App Service worker. They disappear after restart or eviction; a missing or foreign
+receipt returns `404`. The browser polls for at most ten minutes. On interruption,
+reload the reel and inspect its revision before retrying, because a completed
+edit may already be durable even if its receipt was lost. Do not automatically
+resubmit an uncertain edit. A second heavy operation is rejected with `429`,
+not queued. Actual media validation/rendering still precede the atomic project
+commit, and a newer revision produces `409` rather than being overwritten.
+Keep one Uvicorn worker and one App Service instance for this process-local
+design. Scaling requires shared job state and admission control first.
 
 ## 6. Persistence and backups
 
@@ -491,7 +522,7 @@ expected mask-model identity. The backend fingerprint is captured once at
 worker startup, so replacing files does not make an old process appear new.
 **During a rolling restart, an old container can still answer health requests.**
 The new source/model checks must pass before starting a long render.
-In-flight synchronous edits can be interrupted by recycling. The health endpoint's
+In-flight edits and transient job receipts can be interrupted by recycling. The health endpoint's
 `version` value is not a Git commit or proof that the new worker is serving.
 
 Read-only diagnostics:
@@ -1012,3 +1043,108 @@ left on device`. Frontend job `17581812030` could not pull its Node image
 - **Next:** publish this verified source, deploy it, and record a new real HTTP
   journey with exact backend/model guards. Only that successful capture will
   establish the production scenario and enter the final movie.
+
+### 2026-10-29: verified CPU/motion source published, deployment underway
+
+- **Merged:** private [MR !9](https://gitlab.com/fokas-labs/folio/-/merge_requests/9)
+  is merged as `110c68c`; public
+  [PR #3](https://github.com/ShemManyu/FoleyGraph/pull/3) is merged as `a88816b`.
+  A credential-free fetch of public main succeeded and all `58` tracked files
+  matched. The new public commit's credential scan found no leaks.
+- **CI:** pipeline `3005396345` is failed, not green. Backend job `17586338706`
+  exhausted runner disk during dependency installation; frontend job
+  `17586338707` exhausted disk while pulling the Node image. The unchanged
+  project merge policy does not require successful CI; no protection was
+  disabled or bypassed. The local `68` tests and `30` deliberate controls passed.
+- **Deployment:** the existing-resource release command is running, using
+  backend fingerprint
+  `bd45977590bfe3c3f2742030a935f709d8ed8256dfded06f288c5e19d13d3859`
+  and the unchanged verified v2 model. Production readiness and the full HTTP
+  scenario remain unverified until the build and new capture complete.
+- **Cleanup:** the temporary SSH tunnel is stopped. Only the inspected,
+  task-owned diagnostic files and directory were removed from the container;
+  verified receipts, outputs and both failed takes remain private locally.
+
+### 2026-10-29: corrected source deployed and exact runtime readiness verified
+
+- **Deployed:** Azure build `ef06d5d8-fba4-45c4-b432-ca74f3f5361e` completed.
+  HTTPS, frontend, Table Storage, backend `bd459775...` and model `d36e9d0c...`
+  passed readiness. A separate public health/config check confirmed those exact
+  identities. The plan is still B1 with one instance.
+- **Next:** record the complete real browser journey in a fresh
+  `.data/showcase/meta-submission/` directory, checking source/model identities
+  before starting. Readiness is not a successful edit; the actual chat requests,
+  revisions and exports must still complete before a production demo is claimed.
+
+### 2026-10-29: third actual HTTP take still reaches the deadline
+
+- **Actual result:** the cold production request returned HTTP `422` after
+  `230.19s`, including planning/grounding, with the Meta render deadline message.
+  Correct source/model readiness and the isolated container's local-scratch
+  result did not establish the end-to-end production path.
+- **Preserved:** this failed take is retained separately as
+  `.data/showcase/meta-submission-attempt3-cache-budget-timeout/`. It will not be
+  used in the final film. The private workspace state was saved with restrictive
+  permissions so this owned test project can be inspected/cleaned without
+  touching another user's workspace.
+- **Next:** compare encoding to persistent `/home` storage against local
+  temporary storage on the same container. The earlier codec comparison used
+  local output only and cannot rule out persistent-write latency. Do not mask
+  the failure by recording only a warmed retry or claiming a finished demo.
+
+### 2026-10-29: persistent-write hypothesis rejected, asynchronous edit path needed
+
+- **Measured:** the same 150-frame decode/encode took `19.26s` on local `/tmp`
+  and `18.30s` on persistent `/home/foleygraph/temporary`. Child CPU was about
+  `12.5s` in either case; the persistent source copy took `0.12s`. This does not
+  justify an I/O rewrite. The temporary diagnostic directories and tunnel are
+  cleaned up.
+- **Next implementation:** return a real accepted-job response for chat edits
+  and let the existing browser poll for completion, rather than holding one HTTP
+  request through unpredictable CPU work. Keep the same single processing slot,
+  workspace isolation, atomic revision commits, and App Service/Table Storage
+  architecture. Bound Meta processing to five minutes instead of the inadequate
+  three-minute budget; UI/API callers must not present acceptance as success.
+  Keep job receipts bounded and process-local, explicitly document interruption
+  on worker restart, and retain durable completed project revisions in Table
+  Storage. Verify success, late failure, isolation and conflicts before release.
+
+### 2026-10-29: bounded background chat workflow implemented, validation underway
+
+- **Implemented on `fix/async-chat-edits`:** optional `Prefer: respond-async`
+  acceptance, private receipt polling, a single reserved processing permit,
+  bounded 64-result retention and safe late errors. Existing synchronous callers
+  retain their response shape. The browser waits for the actual result, not the
+  accepted response, and allows ten minutes for the whole edit.
+- **Preserved:** source pixels, tracking/mask cadence, revision checks and the
+  render-before-commit transaction are unchanged. Meta processing now allows
+  300 seconds; CV remains 120. No new dependency, service, worker or SKU.
+- **Tests being run:** forced processing gates distinguish genuine acceptance
+  from completion; checks cover workspace isolation, admission, failure without
+  revision changes, permit release, conflict protection and receipt loss after
+  restart. Browser checks cover polling and late failure. Local results and
+  cold production success have not yet been claimed.
+
+### 2026-10-29: background edits verified locally, release pending
+
+- **Passed:** `74` backend tests, `33` deliberate regression controls, Python
+  lint/format, frontend lint/format/typecheck/build, and all `10` browser
+  scenarios. Processing-gate tests and the mutated controls prove that another
+  workspace cannot inspect a receipt and that failure releases admission.
+- **Actual local HTTP:** one Uvicorn worker returned `202` in `0.0019s` while
+  the controlled worker remained blocked. The submitting TCP connection was
+  closed, then a different connection in the same workspace observed real
+  completion after `2.10s`. Foreign receipt lookup was `404`, concurrent heavy
+  work was `429`, a late failure preserved the revision, and a retry completed.
+  This used a deterministic gated director to test transport, not live Foundry
+  or production model evidence. The owned server and temporary media were
+  removed. Receipt: `.data/meta-integration-check/async-http-verification.json`.
+- **Browser correction:** the initial 12-case run reached the real shared-IP
+  processing quota during its last export. The polling checks now reuse the
+  existing mobile-chat and failure scenarios instead of creating extra demo
+  projects. All 10 pass without changing or disabling production rate limits.
+- **Next:** publish the exact source through PR/MR, verify deployment readiness,
+  and record a fresh cold production take. The recorder now observes the actual
+  accepted response and the browser's terminal poll, rather than expecting an
+  immediate `200`. No production edit or finished replacement movie is claimed
+  by these local checks.

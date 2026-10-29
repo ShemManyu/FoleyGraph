@@ -215,7 +215,12 @@ test("mobile chat has room for conversation, resolves edits, and supports undo w
     page.getByRole("button", { name: "Speak a direction" }),
   ).toBeVisible();
   let selected: string | null = "not called";
+  const statusUrl = `/api/jobs/${"a".repeat(32)}`;
+  let polls = 0;
+  let complete = false;
+  let result: { project: Project; message: string };
   await page.route("**/direct", async (route) => {
+    expect(route.request().headers().prefer).toBe("respond-async");
     const body = route.request().postDataJSON() as {
       revision: number;
       object_id: string | null;
@@ -230,12 +235,21 @@ test("mobile chat has room for conversation, resolves edits, and supports undo w
       },
     });
     expect(edited.ok()).toBeTruthy();
+    result = {
+      project: (await edited.json()) as Project,
+      message: "The cup is 3 dB quieter. Your pour and cafe air are unchanged.",
+    };
     await route.fulfill({
-      json: {
-        project: await edited.json(),
-        message:
-          "The cup is 3 dB quieter. Your pour and cafe air are unchanged.",
-      },
+      status: 202,
+      json: { status: "processing", status_url: statusUrl },
+    });
+  });
+  await page.route(`**${statusUrl}`, (route) => {
+    polls += 1;
+    return route.fulfill({
+      json: complete
+        ? { status: "completed", result }
+        : { status: "processing" },
     });
   });
   await expect(
@@ -249,6 +263,12 @@ test("mobile chat has room for conversation, resolves edits, and supports undo w
     page.getByRole("button", { name: "Enlarge preview" }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Send direction" }).click();
+  await expect.poll(() => polls).toBeGreaterThan(0);
+  await expect(page.getByLabel("Edit direction")).toBeDisabled();
+  await expect(
+    page.locator(".chat-message.assistant").last(),
+  ).not.toContainText("3 dB quieter");
+  complete = true;
   await expect(page.locator(".chat-message.assistant").last()).toContainText(
     "3 dB quieter",
   );
@@ -310,6 +330,35 @@ test("a failed chat edit stays in the conversation without pretending it was app
   ).json()) as Project;
   expect(unchanged.revision).toBe(before.revision);
   expect(unchanged.cues).toEqual(before.cues);
+  await page.unroute("**/direct");
+  const statusUrl = `/api/jobs/${"b".repeat(32)}`;
+  await page.route("**/direct", (route) =>
+    route.fulfill({
+      status: 202,
+      json: { status: "processing", status_url: statusUrl },
+    }),
+  );
+  await page.route(`**${statusUrl}`, (route) =>
+    route.fulfill({
+      json: {
+        status: "failed",
+        error: "This color edit took too long. Try a shorter clip.",
+        error_status: 422,
+      },
+    }),
+  );
+  await page.getByLabel("Edit direction").fill("Make the cup blue");
+  await page.getByRole("button", { name: "Send direction" }).click();
+  await expect(page.locator(".chat-message.assistant").last()).toContainText(
+    "I couldn't make that change. This color edit took too long.",
+  );
+  await expect(page.getByLabel("Edit direction")).toHaveValue(
+    "Make the cup blue",
+  );
+  const afterFailure = (await (
+    await page.request.get(`/api/projects/${before.id}`)
+  ).json()) as Project;
+  expect(afterFailure).toEqual(unchanged);
 });
 
 test("a new clip receives its first sound pass from chat without a separate setup panel", async ({
