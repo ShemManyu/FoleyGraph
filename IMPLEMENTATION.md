@@ -223,6 +223,13 @@ Current source-color matching, grounding and protected points still restrict
 every recolored pixel. This is approximate hybrid tracking, not a promise of
 pixel-accurate identity through occlusion.
 
+Grounded fabric vertices explicitly on the image edge stay on that edge during
+affine tracking. Otherwise shirt motion can drag a cropped trouser boundary
+inward and clip still-visible fabric. The grounding can move off the edge in
+later anchors; source color, connected components, Meta support and protection
+still gate recoloring. This never generates missing video pixels. New previews
+use `surface-v18` so cached edge gaps are not reused for an edit.
+
 Each inference sees immutable original pixels, not another recolor or a title.
 Invalid weights, low-confidence output, missed foreground points, protected-point
 violations, and unrenderable selections reject the edit. Do not silently relabel
@@ -1148,3 +1155,152 @@ left on device`. Frontend job `17581812030` could not pull its Node image
   accepted response and the browser's terminal poll, rather than expecting an
   immediate `200`. No production edit or finished replacement movie is claimed
   by these local checks.
+
+### 2026-10-29: asynchronous source published, exact deployment next
+
+- **Merged:** private MR
+  [!10](https://gitlab.com/fokas-labs/folio/-/merge_requests/10) at
+  `f35581448fea69ea79e237e2ed652180ccf75bd0`; public PR
+  [#4](https://github.com/ShemManyu/FoleyGraph/pull/4) at
+  `ee197719f02323215854e8a81d7e010ace966e44`. The public snapshot passed the
+  new-commit credential scan. A fresh HTTPS fetch with an empty credential
+  environment verified public-main access and exact parity for all 58 files.
+- **CI limitation:** pipeline `3005523756` is not green. Frontend job
+  `17587339522` failed from verified runner disk exhaustion before tests;
+  backend job `17587339521` remained running after the bounded wait. The
+  project has `only_allow_merge_if_pipeline_succeeds=false`; no protection
+  was disabled. The completed local checks above are the verification evidence.
+- **Release identity:** backend fingerprint
+  `9255c4741a9cda693380bba29138a5925b88427389d9fc7a886aa60f40d6afa9`;
+  unchanged reviewed 512-pixel model fingerprint
+  `d36e9d0c438cc2278b1d32de89ccaf4352ea44d8cc9339f610bc3ced4b7d0a9a`.
+  The rebuilt frontend contains job polling. Deploy the merged source and
+  verify all identities before the fresh cold take. Publication is not yet
+  production render success.
+
+### 2026-10-29: asynchronous build deployed, fresh live capture starting
+
+- **Deployed:** Azure build `8583f86a-d4a5-44e5-b9c0-d55a02bdc003`, using
+  the existing-resource release without provisioning or configuration changes.
+  Exact backend fingerprint `9255c474...`, rebuilt HTML/assets, Table Storage
+  access, Foundry availability and the reviewed `d36e9d0c...` 512-pixel model
+  passed readiness. Receipt:
+  `.data/meta-integration-check/production-async-readiness.json`.
+- **Not prewarmed:** readiness inspected health and model metadata only, without
+  running inference. A fresh capture directory is available. The recorder also
+  verifies the runtime inside each browser's own session and saves private
+  workspace state with restrictive permissions.
+- **Next:** actual accepted edit, terminal poll, retained title/music, real
+  MP4 download and scoped cafe sound comparison. Readiness alone still does not
+  establish a working Meta recolor or a finished movie.
+
+### 2026-10-29: first live async response clarified instead of rendering
+
+- The real browser received `202` in `0.29s` and a completed job after `8.16s`,
+  but Foundry returned a shade question, not actions. The project remained at
+  revision zero. The recorder correctly rejected this as an applied-edit take.
+  This verifies live acceptance/polling, **not Meta render completion**.
+- Preserve the take as
+  `.data/showcase/meta-submission-attempt4-async-clarification/`. No Meta
+  inference ran through this clarification path. Retry with the more explicit
+  garment request used by the narration, `Make the left man's clothes
+  terracotta.`, without fabricating a result or warming the encoder first.
+  Unnecessary model clarification remains a known nondeterministic limitation.
+
+### 2026-10-29: actual production Meta journey and exports completed
+
+- **Actual App Service:** the explicit garment request completed with saved
+  Meta provenance at revision 1. Adding the title and ambient music produced
+  revision 2; sage-green revision 3 retained the same effect identity, title and
+  music. Each request used real `202` acceptance and the browser's real terminal
+  poll. The first recolor was not prewarmed by a diagnostic inference.
+- **Measured complete waits:** first color `163.53s`, title/music `110.59s`,
+  follow-up color `90.85s`, finished-reel export `4.37s`. These are slow B1 CPU
+  edits, not instant editing. The successful scenario uses more explicit wording
+  than the earlier timed-out takes; it does not prove a universal latency bound.
+- **Captured:** `.data/showcase/meta-submission/` contains the real mobile-sized
+  browser/audio recordings, downloaded MP4s and private editable bundles.
+  Capture-only checks fully decoded all three finished exports, verified
+  unchanged source hashes, and measured the pour at `-3.00 dB`. Room and ceramic
+  WAV layers are byte-identical before/after. There were no browser errors.
+- **Next:** review motion against the actual saved geometry, compose the
+  three-minute film, verify its final mixed narration/captions and publish only
+  curated, credential-free artifacts. A public playable film is still pending.
+
+### 2026-10-29: assembled film withheld after crop-edge motion review
+
+- The composed film is `164.39s`, 1080p H.264/AAC, fully decodable, with zero
+  clipped samples. ASR of its actual final mix matched narration at `0.9842`;
+  captions match the script, in at most two lines and 42 characters per line.
+  **It is not published yet.**
+- Reviewing all 150 recorded frames, not just the contact-sheet samples,
+  exposed a short original-color band at the bottom crop boundary in frames
+  6 and 7. The worst recorded coverage of the local visible source-color guide
+  was `96.80%`, below the diagnostic's `98%` gate. The local raw rerender's
+  `99.97%` result did not establish the recorded Linux output. These are guide
+  comparisons, not semantic segmentation accuracy.
+- The discrepancy image localizes the largest region to the bottom 22 pixels,
+  not a moving hand. Dense flow currently samples outside the prior frame as
+  zero, deleting offscreen continuation of a still-visible garment. Fix this
+  boundary condition, retain source/protection gates and object holes, then
+  require a fresh real recording. Do not hide the band by trimming those frames
+  or relaxing the gate. Evidence is under
+  `.data/showcase/meta-submission/review/early-frame-discrepancy.*`.
+
+### 2026-10-29: crop-edge cause located, grounded tracking correction
+
+- **Rejected hypothesis:** zero-border sampling was not the observed cause.
+  The isolated B1 old/replicated-border renders processed all 150 frames
+  with eight Meta calls and unchanged source bytes, reaching 99.9899% minimum
+  tracked-guide coverage. Both nevertheless reproduce the blue strip, with
+  pixels **identical** to the real recording at frames 6 and 7. The misleading
+  raw metric excluded the missing fabric because it used the drifting polygon.
+  The speculative border change and its tests were withdrawn.
+- **Cause:** the grounded polygon explicitly reaches the bottom crop edge, but
+  its affine motion estimate follows shirt movement inward. The connected-color
+  guide then clips still-visible trouser fabric. This is a crop-edge grounding
+  problem, not an HTTP, model-quality or codec problem.
+- **New regression:** four deterministic rotated cases exercise real garment
+  recoloring with an inward tracking estimate. All fail before the correction
+  and also require all other pixels, including another same-color garment, to
+  remain unchanged afterward.
+- **Correction on `fix/edge-mask-propagation`:** preserve explicitly grounded
+  fabric crop vertices during affine tracking. Other surfaces and downstream
+  source/Meta/protection gates are unchanged. Cache namespace is `surface-v18`.
+  No new model, dependency or resource. Verification and a fresh recorded take
+  are required; the earlier movie remains unpublished.
+- **Local verification passed:** 78 backend cases, Python lint/format and all 34
+  deliberate regression controls. Removing crop-edge preservation makes the
+  four new cases fail. Frontend source/build is unchanged. Candidate runtime
+  fingerprint: `9248d6e6ceedba551fadce398d182de3dc322d2d8d502e37a926ec9f7ad713a5`.
+- **Verification corrected:** compare against the original interpolated grounding
+  polygon, not the propagated polygon being tested. This strengthens the same
+  98% diagnostic threshold and exposes the actual omitted cloth. The diagnostic
+  process is separate from the serving worker; owned remote files and the first
+  tunnel were removed/stopped.
+- **Publication gate strengthened:** both the first recolor and final color
+  revision must supply 150-frame recorded-video checks bound to their exact
+  MP4 and saved project bytes. Captions are applied to both comparison baselines,
+  never altered in the recording. The older movie was explicitly rejected
+  despite its passing decode/audio checks. These are source-guide diagnostics,
+  not semantic segmentation accuracy.
+
+### 2026-10-29: exact production crop defect reproduced and corrected on B1
+
+- **Negative control now catches the real defect:** using the independent
+  grounding guide on the actual saved production geometry, old code reaches
+  only **96.8189%** minimum raw guide coverage across 150 frames.
+- **Correction passes:** the same B1, source, model and geometry reach
+  **99.9640%** with only crop-edge preservation added. Both runs use eight
+  actual Meta calls and preserve source bytes. Frame 6 was visually compared:
+  the old visible blue trouser strip is gone, with the other subject unchanged
+  in the checked raw control region.
+- **Scope:** this is an isolated native-Linux process, not replacement footage
+  for the browser film or a prewarm of the serving worker. Artifacts remain in
+  `.data/meta-integration-check/native-grounded-crop-edge/`; owned remote files
+  were removed and the tunnel stopped. Fresh deployed-browser proof is next.
+- **Review:** private MR !11 contains the correction, four before/after
+  regressions, negative control, cache invalidation and this handoff. Its
+  functional pipeline `3005795385` was still running when inspected, not green.
+  Earlier pipeline `3005523756` had a frontend runner-system failure and a
+  still-running backend job. No pipeline protections were changed.

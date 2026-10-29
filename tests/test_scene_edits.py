@@ -673,6 +673,57 @@ def test_clothing_at_the_frame_edge_is_recolored_without_touching_the_other_pers
     assert np.array_equal(changed[: 70 * scale], frame[: 70 * scale])
 
 
+@pytest.mark.parametrize("rotation", range(4))
+def test_grounded_fabric_keeps_its_cropped_edge_during_tracking(monkeypatch, rotation):
+    frame = np.full((240, 320, 3), (38, 48, 42), np.uint8)
+    frame[80:, 40:140] = (46, 54, 95)
+    frame[80:, 230:300] = (46, 54, 95)
+    garment = np.zeros(frame.shape[:2], bool)
+    garment[80:, 40:140] = True
+    boundary = np.zeros_like(garment)
+    boundary[225:, 60:120] = True
+    outline = selection("#2e365f", grounded=True)
+    points = (
+        (0.1, 0.3),
+        (0.25, 0.3),
+        (0.45, 0.3),
+        (0.45, 0.6),
+        (0.45, 1),
+        (0.25, 1),
+        (0.1, 1),
+        (0.1, 0.6),
+    )
+    for key in outline.keyframes:
+        key.points = [Point(x=x, y=y) for x, y in points]
+        key.seeds = [Point(x=0.25, y=0.6)]
+        key.protected = [Point(x=0.83, y=0.6)]
+        for point in key.points + key.seeds + key.protected:
+            for _ in range(rotation):
+                point.x, point.y = point.y, 1 - point.x
+    frame, garment, boundary = [
+        np.ascontiguousarray(np.rot90(array, rotation)) for array in (frame, garment, boundary)
+    ]
+    effect = RecolorEffect(**outline.model_dump(), target="cropped outfit", color="#C66A4A")
+    track = RecolorTrack(effect)
+    gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
+    track.apply(frame, gray, 0)
+    track.features = np.array([[[50, 70]], [[70, 70]], [[50, 90]], [[70, 90]]], np.float32)
+    motion = np.array(((0, -35), (-35, 0), (0, 35), (35, 0))[rotation], np.float32)
+    monkeypatch.setattr(
+        cv2,
+        "calcOpticalFlowPyrLK",
+        lambda previous, current, features, *args, **kwargs: (
+            features + motion,
+            np.ones((len(features), 1), np.uint8),
+            None,
+        ),
+    )
+    changed = track.apply(frame, gray, 0.04)
+    edge = changed[boundary].astype(int)
+    assert np.all(edge[:, 0] > edge[:, 2] + 60)
+    assert np.array_equal(changed[~garment], frame[~garment])
+
+
 @pytest.mark.parametrize(
     ("ids", "confidence", "accepted"),
     (([1], 0.95, True), ([999], 0.95, False), ([1], 0.4, False), ([], 0.95, False)),
