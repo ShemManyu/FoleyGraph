@@ -1533,3 +1533,23 @@ left on device`. Frontend job `17581812030` could not pull its Node image
   Final documentation merge/public-source parity are the remaining delivery
   operations. WABA implementation/authorization and event owner details remain
   explicitly blocked rather than fabricated.
+
+### 2026-10-29: verified demo delivery closed, owner-only blockers remain
+
+- [Private MR !13](https://gitlab.com/fokas-labs/folio/-/merge_requests/13)
+  and [public PR #7](https://github.com/ShemManyu/FoleyGraph/pull/7) merged
+  the delivery documentation with exact-head guards.
+- A fresh **credential-free anonymous HTTPS clone** verified all 58 tracked
+  files at public release `216e8285...` against private release `abf76caa...`.
+  Git system/global configuration, credential helpers, inherited GitHub/SSH
+  credentials and the normal home directory were disabled for that check.
+- Final live readiness still reports backend `2a7c06f8...`, Azure Table Storage
+  and the expected 512-pixel `d36e9d...` model. Recording, movie review, public
+  media delivery and the operator handoff are complete. This closing record is
+  documentation only and needs no application redeployment.
+- Remaining work: obtain the authorized WABA/business workflow inputs, then
+  implement and genuinely validate that separate integration; confirm team,
+  one track, participation/model eligibility and submit the event form. Shared
+  backend CI also needs a runner with free disk space before rerunning its
+  dependency installation. Do not confuse that infrastructure failure with
+  either failing application tests or a green pipeline.
