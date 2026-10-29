@@ -14,6 +14,7 @@ from server.segmentation import (
     predict_mask,
     propagate_mask,
     refine_tracked_mask,
+    tracking_envelope,
 )
 
 cv2.setNumThreads(1)
@@ -352,6 +353,9 @@ class RecolorTrack:
                 self.model_timestamp = timestamp
             else:
                 self.model_mask = propagate_mask(self.model_mask, self.model_gray, gray)
+            if self.effect.surface_kind == "fabric":
+                # Preserve support for fabric revealed by a moving hand or fold.
+                self.model_mask = tracking_envelope(self.model_mask)
             self.model_mask = refine_tracked_mask(
                 self.model_mask, model_guide, (model_info() or {}).get("input_size", INPUT_SIZE)
             )
@@ -480,7 +484,7 @@ def prepare_preview(project: Project, folder: Path) -> Path:
         return folder / "source.mp4"
     document = "[" + ",".join(effect.model_dump_json() for effect in project.visual_edits) + "]"
     caption = project.caption.model_dump_json() if project.caption else "null"
-    fingerprint = hashlib.sha256(f"surface-v15:{document}:{caption}".encode()).hexdigest()[:24]
+    fingerprint = hashlib.sha256(f"surface-v17:{document}:{caption}".encode()).hexdigest()[:24]
     target = folder / "previews" / f"{fingerprint}.mp4"
     if target.is_file():
         project.preview_id = fingerprint
@@ -495,7 +499,8 @@ def prepare_preview(project: Project, folder: Path) -> Path:
     writer = None
     tracks = [RecolorTrack(effect) for effect in project.visual_edits]
     first_frame = None
-    deadline = time.monotonic() + 120
+    uses_meta = any(effect.mask_model == "sam2.1-hiera-tiny" for effect in project.visual_edits)
+    deadline = time.monotonic() + (180 if uses_meta else 120)
     try:
         metadata = next(reader)
         width, height = metadata["size"]

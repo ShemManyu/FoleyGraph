@@ -214,17 +214,28 @@ fingerprint must still match. Use the matching bundle to render an old project.
 
 ONNX Runtime executes on CPU with one inference thread. SAM runs at grounding
 anchors, with a one-second maximum refresh gap for sparse controls. Between
-anchors, dense optical flow propagates the learned mask. Bounded source-surface
-snapping repairs small disocclusions only on color components already almost
-entirely supported by that mask. Original color matching and protected points
-still restrict the final recolor. This is approximate hybrid tracking, not a
-promise of pixel-accurate identity through occlusion.
+anchors, dense optical flow propagates model-derived support. For fabric only,
+a convex envelope of that support bridges temporary hand/fold occlusions,
+without extending its outer spatial bounds. Object-mask holes are not filled
+this way. Bounded source-surface snapping repairs small boundary gaps only on
+color components already almost entirely supported by the tracked envelope.
+Current source-color matching, grounding and protected points still restrict
+every recolored pixel. This is approximate hybrid tracking, not a promise of
+pixel-accurate identity through occlusion.
 
 Each inference sees immutable original pixels, not another recolor or a title.
 Invalid weights, low-confidence output, missed foreground points, protected-point
 violations, and unrenderable selections reject the edit. Do not silently relabel
 a CV render as Meta-backed. Restart after model preparation because verified
 metadata and inference sessions are cached.
+
+The encoder also caches up to eight identical resized original frames in memory,
+keyed by pixels, input size and model fingerprint. Follow-up colors or titles can
+reuse those features; prompts, decoder output, confidence and protection checks
+are still evaluated anew. The cache is bounded, process-local and lost at restart.
+Meta preview processing has a 180-second deadline; CV-only processing retains
+120 seconds. Model loading, planning and output finalization add overhead, so
+these are not total request-latency guarantees. Short clips are recommended on B1.
 
 #### Reproduce the conversion instead of downloading
 
@@ -501,22 +512,22 @@ OpenAI and storage also incur usage charges.
 
 ## 9. Troubleshooting and current limits
 
-| Symptom                                             | Check or action                                                                                                                                            |
-| --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Python import/module error                          | Use `.venv/bin/python` and install the repository's requirements, not an unrelated/global environment.                                                     |
-| UI missing or old                                   | Build `web/dist/` again. The backend does not serve the TypeScript source directly.                                                                        |
-| Vite opens but API calls fail                       | Start the backend on port `8000`; that is the configured proxy target.                                                                                     |
-| AI unavailable                                      | Set the endpoint/deployment and valid key or Entra identity. Manual mode is expected without them.                                                         |
-| Foundry `401`, `403`, or deployment-not-found error | Check the correct resource, credential/RBAC access, and deployment name. Do not copy another project's key or rotate a shared resource to fix this app.    |
-| Studio busy / `429`                                 | Only one heavy operation runs at a time. Wait; avoid repeated submissions. Model quota can independently cause `429`.                                      |
-| Edit seems slow                                     | Visual edits in the B1 demonstration took about 77-89 seconds. Start with short clips; no instant-render guarantee is made.                                |
-| Stale revision / `409`                              | Reload the latest project before resubmitting. Do not overwrite another revision blindly.                                                                  |
-| Surface cannot be isolated                          | The edit is rejected rather than fabricated. Use people footage for outfit edits; pale cup/saucer separation remains difficult.                            |
-| Meta model unavailable or hash mismatch             | Prepare the reviewed matching bundle, verify `/api/config`, and restart. Missing optional assets do not make an existing Meta-tagged project a CV project. |
-| Missing projects after clearing cookies             | Workspaces are browser-specific. Restore a previously exported ZIP; do not delete the database or media directory.                                         |
-| Microphone/native sharing unavailable               | Use HTTPS or localhost and a supporting browser/device. Desktop browsers can fall back to MP4 download.                                                    |
-| Old export URL no longer works                      | Only three export directories are kept. Export again from the project.                                                                                     |
-| Expected WhatsApp bot or business-data replies      | Not implemented. Sharing an MP4 is not Cloud API messaging, webhooks, or business-profile automation.                                                      |
+| Symptom                                             | Check or action                                                                                                                                                      |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Python import/module error                          | Use `.venv/bin/python` and install the repository's requirements, not an unrelated/global environment.                                                               |
+| UI missing or old                                   | Build `web/dist/` again. The backend does not serve the TypeScript source directly.                                                                                  |
+| Vite opens but API calls fail                       | Start the backend on port `8000`; that is the configured proxy target.                                                                                               |
+| AI unavailable                                      | Set the endpoint/deployment and valid key or Entra identity. Manual mode is expected without them.                                                                   |
+| Foundry `401`, `403`, or deployment-not-found error | Check the correct resource, credential/RBAC access, and deployment name. Do not copy another project's key or rotate a shared resource to fix this app.              |
+| Studio busy / `429`                                 | Only one heavy operation runs at a time. Wait; avoid repeated submissions. Model quota can independently cause `429`.                                                |
+| Edit seems slow                                     | Meta CPU editing can take minutes on B1. Processing is bounded to 180 seconds (CV-only: 120); unchanged source encodings are cached for follow-ups. Use short clips. |
+| Stale revision / `409`                              | Reload the latest project before resubmitting. Do not overwrite another revision blindly.                                                                            |
+| Surface cannot be isolated                          | The edit is rejected rather than fabricated. Use people footage for outfit edits; pale cup/saucer separation remains difficult.                                      |
+| Meta model unavailable or hash mismatch             | Prepare the reviewed matching bundle, verify `/api/config`, and restart. Missing optional assets do not make an existing Meta-tagged project a CV project.           |
+| Missing projects after clearing cookies             | Workspaces are browser-specific. Restore a previously exported ZIP; do not delete the database or media directory.                                                   |
+| Microphone/native sharing unavailable               | Use HTTPS or localhost and a supporting browser/device. Desktop browsers can fall back to MP4 download.                                                              |
+| Old export URL no longer works                      | Only three export directories are kept. Export again from the project.                                                                                               |
+| Expected WhatsApp bot or business-data replies      | Not implemented. Sharing an MP4 is not Cloud API messaging, webhooks, or business-profile automation.                                                                |
 
 Supported media is one uninterrupted clip, at most 20 seconds and 100 MB,
 normalized to H.264 with a maximum side of 1280 pixels and at most 60 fps.
@@ -882,3 +893,122 @@ left on device`. Frontend job `17581812030` could not pull its Node image
 - **Next:** publish the v2 release/source, verify its anonymous installer,
   deploy to the existing B1 service, and verify an actual successful edit
   before using any replacement capture.
+
+### 2026-10-29: v2 published and deployed, full B1 render still blocked
+
+- **Published:** private [MR !8](https://gitlab.com/fokas-labs/folio/-/merge_requests/8)
+  merged as `ae2a08f`; public [PR #2](https://github.com/ShemManyu/FoleyGraph/pull/2)
+  merged as `e38d6b4`. Public model release
+  <https://github.com/ShemManyu/FoleyGraph/releases/tag/meta-sam2.1-cpu-v2>
+  is complete. Another full fresh anonymous default download passed, and all
+  four prepared hashes match GitHub's computed release digests and the local
+  reproducible export. Public main was fetched without credentials and all
+  `58` tracked files matched.
+- **CI:** pipeline `3005127924` failed in backend job `17584124734` with verified
+  runner disk exhaustion. It is not a green pipeline.
+- **Deployed:** build `160248c6-8129-4700-bc7a-43240c1fd0d9` passed readiness with
+  backend `81bd2e85...` and 512-pixel model `d36e9d0c...`, on the same single B1
+  instance.
+- **Actual result:** the second real production take still returned the render
+  deadline error, after `144.77s` including grounding. Its source is exactly the
+  reviewed `6s`, `25fps`, `540x960` clip, with source hash `f77e9c8e...`.
+  This is not a successful demo. The failed take is preserved separately.
+- **Diagnosis:** an authorized container-side CPU probe confirms the actual
+  Linux runtime uses the correct model. Import and session initialization took
+  about `8.10s`; individual encoder calls took about `6-7s`, while decoder calls
+  took about `0.15s`. This narrows the issue to the full render path rather than
+  simply claiming missing weights or successful inference from `/healthz`.
+  The first full render profile was interrupted by the diagnostic tunnel's
+  expiry, so its partial output is not treated as a completed benchmark.
+- **Next:** finish a bounded full-render profile on the actual container,
+  distinguish compute from persistent-media I/O, fix the measured bottleneck,
+  then repeat the real app scenario. Do not relax quality or publish a relabeled
+  old CV recording as the new Meta demo.
+
+### 2026-10-29: actual-container render profile completed, bounded fix in progress
+
+- **Measured:** a complete diagnostic on the actual B1 container reached only
+  `112/150` frames at `121.14s`, ending at the unchanged 120-second deadline.
+  Six model predictions consumed `55.66s` in total. The diagnostic used
+  container-local temporary media, so persistent customer-media storage alone
+  does not explain the failure. The completed report is retained privately at
+  `.data/meta-integration-check/production-b1-render-profile-v2.log`.
+- **Rejected hypothesis:** a real 150-frame decode/encode comparison took
+  `16.78s` with existing FFmpeg options and `15.42s` with bounded filter threads.
+  Child CPU times were essentially unchanged. This is not sufficient evidence
+  for an FFmpeg threading fix, and none is being shipped.
+- **Candidate:** retain every grounding refresh and decoder/protection check,
+  but reuse encoder features for up to eight identical resized original frames.
+  Cache keys include pixels, installed input size, and model identity; masks and
+  prompts are never cached. Permit Meta renders up to `180s` based on the
+  measured workload, retaining the existing `120s` budget for CV-only edits.
+  This still needs focused tests, deliberate regression controls, local motion
+  review, and a completed actual-container candidate run.
+- **Capture:** both failed takes remain private and preserved, including
+  `.data/showcase/meta-submission-attempt2-512-timeout/`. No replacement film or
+  successful production Meta edit is claimed.
+
+### 2026-10-29: CPU candidate completes, deeper motion review rejects the old tracker
+
+- **CPU result:** the isolated actual-container candidate completed all `150`
+  frames with all `8` mask/decoder calls. The instrumented cold run took
+  `185.16s`, including writer finalization after the last deadline check; a fresh
+  render with the same source encodings cached took `74.53s`. All eight encoder
+  lookups hit on the second run. Peak RSS of this diagnostic process was about
+  `435 MiB`, not the combined application/container peak.
+- **Local checks:** the cache and budget changes passed `66` backend tests,
+  `28` deliberate regression controls, and Python style checks. Both actual B1
+  output files fully decode and are byte-identical.
+- **Review failure:** checking additional intermediate frames exposed uncolored
+  bands at frames `10` and `62`, identically on the Mac and B1. The earlier seven
+  sampled frames missed this. The strengthened every-frame check now fails
+  honestly, with a worst CV-guide changed fraction of only `66.8%`. These
+  renders are rejected for the final film despite completing successfully.
+- **Cause and next fix:** the tracked clothing mask carries a moving hand's old
+  exclusion into newly revealed fabric. A fabric-only envelope derived from the
+  learned silhouette will bridge these temporary occlusions, still gated by
+  current source-color components, protected points, and the learned spatial
+  bounds. Object-mask holes remain untouched. Re-run every-frame coverage and
+  visual review, then verify the updated actual-container output before release.
+  No production edit or submission movie is claimed yet.
+
+### 2026-10-29: every-frame fabric disocclusion verified locally
+
+- **Fixed:** maintain a fabric-only convex envelope of learned support after
+  each flow step, not just at an inference anchor. This prevents a moving hand
+  from carrying an old exclusion into newly revealed garment pixels. Current
+  color components, grounding and protected points remain final gates. Object
+  holes and learned spatial limits remain protected by focused tests.
+- **Full motion:** the strengthened verifier checks all `150` frames, not seven
+  samples. Its minimum CV-guide changed fraction is now `99.97%`, with all `8`
+  model/decoder calls retained. Original source bytes and the rightmost 140 raw
+  columns remain unchanged on every frame. The nine-frame contact sheet,
+  including the previously failing frames `10` and `62`, passed visual review.
+  The local render/decode plus verification took `11.92s`; this is not B1 timing.
+- **Cache:** new previews use a new namespace so patchy old renders are not
+  mistaken for the corrected output. Existing projects/history are not rewritten.
+- **Next:** verify the same updated code in an isolated actual-container run,
+  publish the checked source through PR/MR, deploy, and test the real HTTP journey.
+  The live service still runs the earlier source until that deployment succeeds.
+
+### 2026-10-29: corrected motion passes every-frame checks on the actual B1 CPU
+
+- **Actual container:** an isolated process using the candidate source completed
+  the real six-second clip in `154.10s`, including full decode and every-frame
+  diagnostic checks. All `150` frames and all `8` model/decoder calls were
+  retained. Minimum CV-guide changed fraction was `99.99%`; the original source
+  and rightmost 140 raw columns remained unchanged on every frame.
+- **Review:** the corrected nine-frame real-container contact sheet includes
+  the previously failing motion, and the complete exported clip is retained for
+  review at `.data/meta-integration-check/production-b1-disocclusion-check/`.
+  This is actual B1 inference, but still not a production HTTP edit.
+- **Checks:** `68` backend tests, `30` deliberate regression controls, Python
+  lint and format checks pass. Controls reject lost encoder reuse, wrong model
+  cache identity, the old deadline, retained occlusion holes, and accidentally
+  filling object-mask holes. No frontend or dependency changed.
+- **Capacity:** diagnostic process peak RSS was about `456 MiB`, not an
+  aggregate container peak. The plan remains one B1 instance; no paid scaling,
+  dropped anchors or lower-resolution model was required.
+- **Next:** publish this verified source, deploy it, and record a new real HTTP
+  journey with exact backend/model guards. Only that successful capture will
+  establish the production scenario and enter the final movie.

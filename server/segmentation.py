@@ -152,6 +152,26 @@ def refine_tracked_mask(
     return mask | ((supported[labels] & nearby & (guide > 0)).astype(np.uint8) * 255)
 
 
+def tracking_envelope(mask: np.ndarray) -> np.ndarray:
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
+        return mask
+    envelope = np.zeros_like(mask)
+    cv2.fillConvexPoly(envelope, cv2.convexHull(np.vstack(contours)), 255)
+    return envelope
+
+
+@lru_cache(maxsize=8)
+def _encode_image(pixels: bytes, size: int, model_sha256: str):
+    values = np.frombuffer(pixels, dtype=np.uint8).reshape(size, size, 3).astype(np.float32) / 255
+    values = (values - np.array([0.485, 0.456, 0.406], np.float32)) / np.array(
+        [0.229, 0.224, 0.225], np.float32
+    )
+    tensor = np.ascontiguousarray(values.transpose(2, 0, 1)[None])
+    encoder, _ = _sessions()
+    return encoder.run(None, {"image": tensor})
+
+
 def predict_mask(
     frame: np.ndarray,
     polygon: np.ndarray,
@@ -174,13 +194,8 @@ def predict_mask(
     coordinates = np.array([corners + positive + negative], np.float32) * size
     labels = np.array([[2, 3] + [1] * len(positive) + [0] * len(negative)], dtype=np.int32)
     image = Image.fromarray(frame).resize((size, size), Image.Resampling.BILINEAR)
-    values = np.asarray(image).astype(np.float32) / 255
-    values = (values - np.array([0.485, 0.456, 0.406], np.float32)) / np.array(
-        [0.229, 0.224, 0.225], np.float32
-    )
-    tensor = np.ascontiguousarray(values.transpose(2, 0, 1)[None])
-    encoder, decoder = _sessions()
-    embedding, high0, high1 = encoder.run(None, {"image": tensor})
+    embedding, high0, high1 = _encode_image(image.tobytes(), size, model_sha256)
+    _, decoder = _sessions()
     logits, scores = decoder.run(
         None,
         {

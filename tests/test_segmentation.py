@@ -2,6 +2,7 @@ import hashlib
 import io
 import json
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import cv2
 import numpy as np
@@ -53,8 +54,10 @@ def prepared_model(tmp_path, monkeypatch):
     )
     monkeypatch.setattr(segmentation, "MODEL_DIR", directory)
     segmentation.model_info.cache_clear()
+    segmentation._encode_image.cache_clear()
     yield directory
     segmentation.model_info.cache_clear()
+    segmentation._encode_image.cache_clear()
 
 
 @pytest.mark.parametrize("filename", ["encoder.onnx", "decoder.onnx"])
@@ -98,6 +101,46 @@ def test_predictor_uses_installed_bundle_resolution(prepared_model, monkeypatch,
     assert tensors[0].shape == (1, 3, input_size, input_size)
     np.testing.assert_allclose(prompts[0][0, 2], np.array([0.75, 0.54]) * input_size)
     assert result[125, 220] == 255 and result[129, 80] == 0
+
+
+def test_encoder_reuses_only_identical_source_and_model_but_rechecks_each_prompt(
+    prepared_model, monkeypatch
+):
+    logits = np.full((1, 1, 240, 320), -1, np.float32)
+    logits[:, :, 84:173, 208:272] = 1
+    encoder = Mock(return_value=[np.zeros((1, 1), np.float32)] * 3)
+    decoder = Mock(return_value=(logits, np.array([[0.95]], np.float32)))
+    monkeypatch.setattr(
+        segmentation,
+        "_sessions",
+        lambda: (SimpleNamespace(run=encoder), SimpleNamespace(run=decoder)),
+    )
+    info = segmentation.model_info()
+    image = np.full((240, 320, 3), 100, np.uint8)
+    polygon = np.array([[208, 84], [272, 84], [272, 173], [208, 173]], np.float32)
+
+    def predict(protected):
+        return segmentation.predict_mask(
+            image,
+            polygon,
+            np.array([[0.75, 0.54]], np.float32),
+            np.array([protected], np.float32),
+            (logits[0, 0] > 0).astype(np.uint8) * 255,
+            info["sha256"],
+        )
+
+    assert predict([0.25, 0.54])[125, 220] == 255
+    with pytest.raises(ValueError, match="protect the surrounding surfaces"):
+        predict([0.75, 0.54])
+    assert encoder.call_count == 1 and decoder.call_count == 2
+    image[0, 0] = 0
+    predict([0.25, 0.54])
+    assert encoder.call_count == 2
+    info = {**info, "sha256": "b" * 64}
+    with monkeypatch.context() as changed_model:
+        changed_model.setattr(segmentation, "model_info", lambda: info)
+        predict([0.25, 0.54])
+    assert encoder.call_count == 3 and decoder.call_count == 4
 
 
 @pytest.mark.parametrize(

@@ -211,6 +211,50 @@ def test_meta_mask_constrains_the_render_without_inference_on_every_frame(
     assert predictor.call_count == 2
 
 
+@pytest.mark.parametrize("surface_kind", ["fabric", "object"])
+def test_meta_fabric_disocclusion_recovers_color_but_object_holes_stay_excluded(
+    monkeypatch, people_video, surface_kind
+):
+    revealed = first_frame(people_video)
+    occluded = revealed.copy()
+    occluded[112:140, 240:273] = (192, 142, 102)
+    learned = np.zeros(revealed.shape[:2], np.uint8)
+    learned[84:173, 208:273] = 255
+    learned[112:140, 240:273] = 0
+    predictor = Mock(return_value=learned)
+
+    def propagate(mask, *args):
+        moved = mask.copy()
+        moved[112:140, 240:273] = 0
+        return moved
+
+    monkeypatch.setattr(visual_module, "predict_mask", predictor)
+    monkeypatch.setattr(visual_module, "propagate_mask", propagate)
+    monkeypatch.setattr(cv2, "calcOpticalFlowPyrLK", lambda *args, **kwargs: (None, None, None))
+    outline = selection(grounded=True, surface_kind=surface_kind)
+    for key in outline.keyframes:
+        key.protected.append(Point(x=0.78, y=0.51))
+    track = RecolorTrack(
+        RecolorEffect(
+            **outline.model_dump(),
+            target="right surface",
+            color="#2872dd",
+            mask_model="sam2.1-hiera-tiny",
+            mask_model_sha256="a" * 64,
+        )
+    )
+    first = track.apply(occluded, cv2.cvtColor(occluded, cv2.COLOR_RGB2GRAY), 0)
+    assert np.array_equal(first[125, 260], occluded[125, 260])
+    changed = track.apply(revealed, cv2.cvtColor(revealed, cv2.COLOR_RGB2GRAY), 0.1)
+    if surface_kind == "fabric":
+        assert int(changed[125, 260, 2]) > int(changed[125, 260, 0]) + 60
+    else:
+        assert np.array_equal(changed[125, 260], revealed[125, 260])
+    assert np.array_equal(changed[122, 249], revealed[122, 249])
+    assert np.array_equal(changed[:, :195], revealed[:, :195])
+    assert predictor.call_count == 1
+
+
 def test_meta_render_samples_original_pixels_before_other_edits(
     monkeypatch, people_video, tmp_path
 ):
@@ -252,6 +296,47 @@ def test_meta_render_samples_original_pixels_before_other_edits(
     for index in range(0, len(inputs), 2):
         assert np.array_equal(inputs[index], inputs[index + 1])
     assert np.array_equal(inputs[0], first_frame(people_video))
+
+
+@pytest.mark.parametrize(
+    ("meta", "elapsed", "succeeds"),
+    [(True, 150, True), (True, 190, False), (False, 150, False)],
+)
+def test_meta_cpu_budget_allows_measured_work_but_remains_bounded(
+    monkeypatch, people_video, tmp_path, meta, elapsed, succeeds
+):
+    folder = tmp_path / "budget"
+    folder.mkdir()
+    shutil.copyfile(people_video, folder / "source.mp4")
+    effect = RecolorEffect(
+        **selection(grounded=True).model_dump(),
+        target="right shirt",
+        color="#2872dd",
+        mask_model="sam2.1-hiera-tiny" if meta else "opencv",
+        mask_model_sha256="a" * 64 if meta else None,
+    )
+    project = Project(
+        media=Media(duration=2, fps=24, width=320, height=240, filename="people.mp4"),
+        visual_edits=[effect],
+    )
+    clock = [0.0]
+    apply = RecolorTrack.apply
+
+    def timed_apply(*args, **kwargs):
+        result = apply(*args, **kwargs)
+        clock[0] += elapsed / 48
+        return result
+
+    monkeypatch.setattr(visual_module, "time", SimpleNamespace(monotonic=lambda: clock[0]))
+    monkeypatch.setattr(RecolorTrack, "apply", timed_apply)
+    monkeypatch.setattr(visual_module, "predict_mask", lambda *args: args[4].copy())
+    if succeeds:
+        assert visual_module.prepare_preview(project, folder).is_file()
+        assert clock[0] == elapsed and project.preview_id is not None
+    else:
+        with pytest.raises(ValueError, match="took too long"):
+            visual_module.prepare_preview(project, folder)
+        assert project.preview_id is None and not list((folder / "previews").glob("*.mp4"))
 
 
 def test_meta_provider_is_saved_only_after_a_successful_render(
