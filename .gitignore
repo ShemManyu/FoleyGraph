@@ -1,0 +1,17 @@
+.venv/
+.data/
+.env
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.pyc
+*.egg-info/
+web/node_modules/
+web/.npm/
+web/dist/
+web/test-results/
+web/playwright-report/
+*.tsbuildinfo
+.DS_Store
+deploy.zip
+server/assets/models/sam2.1-hiera-tiny/

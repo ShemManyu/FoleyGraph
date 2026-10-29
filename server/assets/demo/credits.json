@@ -1,0 +1,24 @@
+{
+  "video": {
+    "title": "Pouring Water into Coffee Cup",
+    "creator": "WIERZBA PH",
+    "source": "https://www.pexels.com/video/pouring-water-into-coffee-cup-14364305/",
+    "download": "https://videos.pexels.com/video-files/14364305/14364305-hd_1080_1920_25fps.mp4",
+    "license": "Pexels License",
+    "license_url": "https://www.pexels.com/license/",
+    "changes": "Eight-second portrait crop, color treatment, and replacement sound design. The old burned-in title was removed from the prepared source. New titles can be added as editable project overlays through chat."
+  },
+  "style_video": {
+    "title": "Two Men Engaging in Conversation Outdoors",
+    "source": "https://www.pexels.com/video/two-men-engaging-in-conversation-outdoors-34708066/",
+    "download": "https://videos.pexels.com/video-files/34708066/14711314_2160_3840_25fps.mp4",
+    "license": "Pexels License",
+    "license_url": "https://www.pexels.com/license/",
+    "changes": "Six-second portrait excerpt, resized to 540x960, without source audio. Real stock footage, not animation or generated characters."
+  },
+  "sound": {
+    "creator": "FoleyGraph",
+    "license": "CC0-1.0",
+    "description": "Original procedural pour, ceramic resonance, and room tone. Not field recordings."
+  }
+}
