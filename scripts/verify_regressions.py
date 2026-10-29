@@ -143,6 +143,15 @@ def main():
             "dragging an explicitly grounded crop edge inward with garment motion",
         ),
         (
+            main_module,
+            main_module,
+            "create_app",
+            '"message": message,',
+            '"message": direction.message,',
+            "tests/test_scene_edits.py::test_title_only_edit_changes_video_pixels_and_can_be_removed",
+            "claiming an omitted music edit from the model reply rather than saved state",
+        ),
+        (
             visual_module,
             visual_module.RecolorTrack,
             "apply",

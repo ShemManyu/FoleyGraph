@@ -279,6 +279,10 @@ class Director:
                         "add/replace/remove original ambient instrumental music, add/change/remove a short "
                         "on-video title with caption, edit existing Foley layers, "
                         "create a first Foley sound pass on a scene with no objects, or undo the last change. "
+                        "A compound request needs every supported requested change in actions: "
+                        "'add a title and ambient music' requires BOTH caption and music. "
+                        "Do not omit one change or mention an edit without its action. "
+                        "'Keep' means preserve existing work, not reset it. "
                         "Recolor requires a specific visible target and hex color. If the color or target "
                         "is missing/ambiguous, ask one short question with actions=[], using history for "
                         "follow-ups such as 'navy blue'. A welcome message or assistant suggestion is NOT "
@@ -327,7 +331,7 @@ class Director:
                     "type": "function",
                     "function": {
                         "name": "direct_reel",
-                        "description": "Resolve a complete edit, or return actions=[] and a short question when information is missing.",
+                        "description": "Include every requested supported change in one actions list, or return actions=[] and a short question when information is missing.",
                         "parameters": schema,
                     },
                 }

@@ -613,9 +613,29 @@ def create_app(settings: Settings | None = None, store=None, director=None) -> F
         prepare_preview(after, folder(before))
         if after.music:
             library.music_path(after)
+        changes = [
+            label
+            for label, changed in (
+                ("the look", before.visual_edits != after.visual_edits),
+                ("the title", before.caption != after.caption),
+                ("the music", before.music != after.music),
+                ("the original soundtrack", before.source_audio_muted != after.source_audio_muted),
+                (
+                    "the sound effects",
+                    before.objects != after.objects or before.cues != after.cues,
+                ),
+            )
+            if changed
+        ]
+        message = "No changes were made."
+        if changes:
+            description = changes[0]
+            if len(changes) > 1:
+                description = f"{', '.join(changes[:-1])} and {changes[-1]}"
+            message = f"Updated {description}."
         return {
             "project": studio.commit(workspace, before, after),
-            "message": direction.message,
+            "message": message,
         }
 
     async def run_edit_job(request, key, before, body):

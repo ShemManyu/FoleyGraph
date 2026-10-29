@@ -981,16 +981,18 @@ def test_title_only_edit_changes_video_pixels_and_can_be_removed(
     scene = upload(client, people_video)
     source = client.get(f"/api/projects/{scene['id']}/source.mp4").content
     director.direction = SceneDirection(
-        message="Added your title.",
+        message="Added your title and ambient music.",
         actions=[CaptionAction(type="caption", text=title)],
     )
     response = client.post(
         f"/api/projects/{scene['id']}/direct",
-        json={"revision": 0, "instruction": f"Add the title '{title}'"},
+        json={"revision": 0, "instruction": f"Add the title '{title}' and ambient music"},
     )
     assert response.status_code == 200, response.text
     changed = response.json()["project"]
     assert changed["preview_id"] and changed["caption"]["text"] == title
+    assert changed["music"] is None
+    assert response.json()["message"] == "Updated the title."
     path = tmp_path / "titled.mp4"
     path.write_bytes(
         client.get(f"/api/projects/{scene['id']}/previews/{changed['preview_id']}.mp4").content
