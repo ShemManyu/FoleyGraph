@@ -797,9 +797,18 @@ left on device`. Frontend job `17581812030` could not pull its Node image
   Do not upload workspaces, credentials, or raw capture traces to `$web`.
 - **Installer:** now uses the versioned Azure mirror by default, retaining
   the reviewed hashes, size cap, 30-second inactivity timeout, and bounded
-  15-minute transfer budget. A full fresh anonymous installation is next.
+  15-minute transfer budget.
+- **Verification:** a full fresh anonymous default installation now passes.
+  Neither ONNX file existed in the public checkout before the run. All four
+  prepared file hashes match the reviewed local export and GitHub release
+  digests. Both public range probes match the original encoder bytes.
+  All `58` tracked application files match the private working tree, and both
+  produce backend fingerprint
+  `ec25d71ea23a502187cdef75b879b31d280fc31b977dee83b45e8f51ec4a2f4d`.
+  The new mirror/installer validation also passes all `10` focused
+  segmentation tests. Detailed local receipt:
+  `.data/submission-audit-tools/public-model-verification.json`.
 - **CI:** functional pipeline `3004913448` also failed because of runner disk
   exhaustion, confirmed in backend job `17582405560` and frontend job
   `17582405561`. This is not a successful CI run.
-- **Next:** verify the fresh mirror installation and public/runtime source
-  parity, merge the source PR/MR, deploy, and measure a real B1 edit.
+- **Next:** merge the source PR/MR, deploy, and measure a real B1 edit.
