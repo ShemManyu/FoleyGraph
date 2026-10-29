@@ -322,6 +322,11 @@ class RecolorTrack:
                             tracking_transform = transform
                             tracked = cv2.transform(self.previous_polygon[None], transform)[0]
                             polygon = tracked * 0.85 + polygon * 0.15
+        if self.grounded and self.effect.surface_kind == "fabric":
+            # Garment motion must not drag an explicitly cropped edge inward.
+            for axis, extent in enumerate((width - 1, height - 1)):
+                polygon[guide[:, axis] <= 0, axis] = 0
+                polygon[guide[:, axis] >= 1, axis] = extent
         polygon[:, 0] = np.clip(polygon[:, 0], 0, width - 1)
         polygon[:, 1] = np.clip(polygon[:, 1], 0, height - 1)
         self.previous_gray, self.previous_polygon, self.anchor = gray, polygon, anchor
@@ -484,7 +489,7 @@ def prepare_preview(project: Project, folder: Path) -> Path:
         return folder / "source.mp4"
     document = "[" + ",".join(effect.model_dump_json() for effect in project.visual_edits) + "]"
     caption = project.caption.model_dump_json() if project.caption else "null"
-    fingerprint = hashlib.sha256(f"surface-v17:{document}:{caption}".encode()).hexdigest()[:24]
+    fingerprint = hashlib.sha256(f"surface-v18:{document}:{caption}".encode()).hexdigest()[:24]
     target = folder / "previews" / f"{fingerprint}.mp4"
     if target.is_file():
         project.preview_id = fingerprint
